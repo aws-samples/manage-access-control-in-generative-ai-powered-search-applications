@@ -1,0 +1,5 @@
+__pycache__/*
+../.DS_Store
+pyvenv.cfg
+.DS_Store
+venv/*
