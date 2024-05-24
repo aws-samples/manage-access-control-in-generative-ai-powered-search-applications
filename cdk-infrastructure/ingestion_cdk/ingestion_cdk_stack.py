@@ -30,8 +30,7 @@ class IngestionCdkStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        #upload aims.json to the S3 bucket from folder aims_opensearch_cdk/custom_resources/data
-        bucket_deployment = s3deploy.BucketDeployment(self, "DeployAimsJson",
+        bucket_deployment = s3deploy.BucketDeployment(self, "DeployJson",
             sources=[s3deploy.Source.asset("./ingestion_cdk/data", exclude=["*", "!*.json"])],
             destination_bucket=data_bucket,
         )
