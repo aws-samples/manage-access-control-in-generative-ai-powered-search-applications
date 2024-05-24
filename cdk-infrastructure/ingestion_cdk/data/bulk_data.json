@@ -1,0 +1,6 @@
+
+[
+   {"doc_text": "this is one test document","doc_id": "1","group": "admins"},
+   {"doc_text": "this is a second test document", "doc_id": "2", "group": "lob"},
+   {"doc_text": "this is a third test document","doc_id": "3","group": "restricted"}
+]

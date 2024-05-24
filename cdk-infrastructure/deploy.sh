@@ -16,3 +16,5 @@ else
     cdk deploy OpensearchCdkStack
     echo "Sleep around 15 minutes to wait for the OpenSearch Service domain to be created"
 fi
+
+cdk deploy IngestionCdkStack

@@ -1,0 +1,10 @@
+{
+    "create_index": true,
+    "index_file_s3_path": "index.json",
+    "mappings_file_s3_path": "mappings.json",
+    "load_data": true,
+    "data_file_s3_path": "bulk_data.json",
+    "index_name": "test-index",
+    "model_provider": "bedrock",
+    "model_id": "cohere.embed-multilingual-v3"
+}
