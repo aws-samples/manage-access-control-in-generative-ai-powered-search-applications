@@ -5,6 +5,7 @@ import aws_cdk as cdk
 
 from  opensearch_cdk.opensearch_cdk_stack import OpensearchCdkStack
 from ingestion_cdk.ingestion_cdk_stack import IngestionCdkStack
+from rag_cdk.rag_cdk_stack import RagCdkStack
 
 def load_env_config(file_name):
     """Load configuration variables from a file."""
@@ -27,5 +28,6 @@ config = load_env_config('prod.env')
 app = cdk.App()
 OpensearchCdkStack(app, "OpensearchCdkStack", config=config)
 IngestionCdkStack(app, "IngestionCdkStack", config=config)
+RagCdkStack(app, "RagCdkStack", config=config)
 
 app.synth()

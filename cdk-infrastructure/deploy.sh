@@ -18,3 +18,4 @@ else
 fi
 
 cdk deploy IngestionCdkStack
+cdk deploy RagCdkStack

@@ -23,6 +23,11 @@ class IngestionCdkStack(Stack):
             simple_name=True,
         )
 
+        aos_domain_arn = ssm.StringParameter.from_string_parameter_name(
+            self, "ImportedAosArnParam",
+            string_parameter_name="AosArn"
+        ).string_value
+
         aos_endpoint = aos_endpoint_param.string_value
 
         # Define the S3 bucket for the OpenSearch deployment
@@ -57,7 +62,7 @@ class IngestionCdkStack(Stack):
                 ),
                 iam.PolicyStatement(
                     actions=["es:ESHttpPost", "es:ESHttpPut", "es:ESHttpGet", "es:ESHttpDelete"],
-                    resources=["*"],
+                    resources=[aos_domain_arn + "/*"],
                     effect=iam.Effect.ALLOW
                 ),
                 iam.PolicyStatement(
