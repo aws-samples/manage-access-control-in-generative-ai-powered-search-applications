@@ -20,7 +20,7 @@ const Attributes: React.FC = () => {
   const [inputValues, setInputValues] = useState<{ [key: string]: string }>({});
   const [attributeStatus, setAttributeStatus] = useState<string>("idle");
 
-  const fetchData = async () => {
+  const getAttributes = async () => {
     setAttributeStatus("loading");
 
     // TODO : Call API to get attributes
@@ -50,7 +50,7 @@ const Attributes: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    getAttributes();
   }, []);
 
   const handleInputChange = (name: string, value: string) => {
@@ -60,7 +60,7 @@ const Attributes: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitAttribute = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // TODO: Call API to save attributes
     // const attributes = await API.post("RestApi", "/attribute/", {});
@@ -94,7 +94,7 @@ const Attributes: React.FC = () => {
       <div className="w-full">
         <form
           className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
-          onSubmit={handleSubmit}
+          onSubmit={handleSubmitAttribute}
         >
           {attributes &&
             attributes.attributes.map((attribute, i) => (
