@@ -4,14 +4,12 @@ from aws_cdk import (
     Duration,
     aws_iam as iam,
     aws_lambda as _lambda,
-    aws_apigatewayv2 as apigatewayv2,
-    aws_ssm as ssm
+    aws_apigateway as apigateway,
+    aws_ssm as ssm,
+    aws_cognito as cognito,
 )
 
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
-
-from aws_cdk.aws_apigatewayv2_authorizers import WebSocketIamAuthorizer
-from aws_cdk.aws_apigatewayv2_integrations import WebSocketLambdaIntegration
 from constructs import Construct
 
 class RagCdkStack(Stack):
@@ -29,18 +27,13 @@ class RagCdkStack(Stack):
             string_parameter_name="AosArn"
         ).string_value
 
+        # Fetch Cognito User Pool ARN from SSM
+        cognito_user_pool_arn = ssm.StringParameter.from_string_parameter_name(
+            self, "ImportedCognitoUserPoolArn",
+            string_parameter_name="CognitoUserPoolArn"
+        ).string_value
 
-        # Lambda Functions for api gateway
-        on_connect_lambda = _lambda.Function(
-            self,
-            "OnConnectLambdaFunction",
-            code=_lambda.Code.from_asset("rag_cdk/lambdas"),
-            handler="on_connect.lambda_handler",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            memory_size=256,
-            timeout=Duration.seconds(300)
-        )
-
+        # Lambda Function for API Gateway
         invoke_model_lambda = PythonFunction(
             self, "InvokeModelLambdaFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
@@ -55,19 +48,17 @@ class RagCdkStack(Stack):
             timeout=Duration.seconds(300),
         )
 
-        
-        
-        # add Bedrock permissions to the lambda function
+        # Add Bedrock permissions to the lambda function
         invoke_model_lambda.add_to_role_policy(iam.PolicyStatement(
             actions=[
-                "bedrock:InvokeModel", 
+                "bedrock:InvokeModel",
                 "bedrock:InvokeModelWithResponseStream"
             ],
             resources=["*"],
             effect=iam.Effect.ALLOW
         ))
 
-        # allow invoke_model_lambda to access opensearch on imported_aos_endpoint
+        # Allow invoke_model_lambda to access OpenSearch on imported_aos_endpoint
         invoke_model_lambda.add_to_role_policy(iam.PolicyStatement(
             actions=[
                 "es:ESHttpGet",
@@ -78,57 +69,49 @@ class RagCdkStack(Stack):
             effect=iam.Effect.ALLOW
         ))
 
-        on_disconnect_lambda = _lambda.Function(
-            self,
-            "OnDisconnectLambdaFunction",
-            code=_lambda.Code.from_asset("rag_cdk/lambdas"),
-            handler="onDisconnect.lambda_handler",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            memory_size=256,
-            timeout=Duration.seconds(300)
-        )
-            
-        # API Gateway WebSocket API
-        api = apigatewayv2.WebSocketApi(
-            self,
-            "WebSocketApi",
-            description="An Amazon API Gateway WebSocket API and an AWS Lambda function.",
-            # route_selection_expression="$request.body.action",
-            connect_route_options=apigatewayv2.WebSocketRouteOptions(
-                integration=WebSocketLambdaIntegration("ConnectIntegration", on_connect_lambda),
-                authorizer=WebSocketIamAuthorizer()
-            ),
-            disconnect_route_options=apigatewayv2.WebSocketRouteOptions(
-                integration=WebSocketLambdaIntegration("DisconnectIntegration", on_disconnect_lambda)
-            ),
-            default_route_options=apigatewayv2.WebSocketRouteOptions(
-                integration=WebSocketLambdaIntegration("DefaultIntegration", invoke_model_lambda)
-            )
-        )
-
+        # Allow access to Cognito
         invoke_model_lambda.add_to_role_policy(iam.PolicyStatement(
-            actions=["execute-api:ManageConnections"],
-            resources=[f"arn:aws:execute-api:{self.region}:{self.account}:{api.api_id}/*/@connections/*"],
+            actions=["cognito-idp:GetUser"],
+            resources=["*"],
+            effect=iam.Effect.ALLOW
         ))
 
-        # allow lambdas to be invoked by the api, use map to assign permissions to all lambdas
-        for lambda_func in [on_connect_lambda, invoke_model_lambda, on_disconnect_lambda]:
-            lambda_func.add_permission(
-                "InvokeModelLambdaPermission",
-                principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
-                source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.api_id}/*",
-            )
+        # API Gateway REST API
+        api = apigateway.RestApi(
+            self,
+            "RestApi",
+            description="An API Gateway REST API and an AWS Lambda function.",
+        )
 
-        api_stage = apigatewayv2.WebSocketStage(self, "DevStage",
-            web_socket_api=api,
-            stage_name="dev",
-            auto_deploy=True
+        # Attach the lambda function to the REST API
+        lambda_integration = apigateway.LambdaIntegration(invoke_model_lambda)
+
+        # Create a Cognito user pool authorizer
+        user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", user_pool_arn=cognito_user_pool_arn)
+        authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self,
+            "CognitoAuthorizer",
+            cognito_user_pools=[user_pool]
+        )
+
+        # Create a resource and method
+        invoke_resource = api.root.add_resource("invoke")
+        invoke_resource.add_method(
+            "POST",
+            lambda_integration,
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO
+        )
+
+        # Allow the lambda function to be invoked by the API Gateway
+        invoke_model_lambda.add_permission(
+            "InvokeModelLambdaPermission",
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.rest_api_id}/*"
         )
 
         # Add API GW endpoint to parameter store
         ssm.StringParameter(self, "APIGWInvokeEndpoint",
             parameter_name="APIGWInvokeEndpoint",
-            string_value=f"wss://{api.api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/{api_stage.stage_name}"
+            string_value=f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod/invoke"
         )
-
-
