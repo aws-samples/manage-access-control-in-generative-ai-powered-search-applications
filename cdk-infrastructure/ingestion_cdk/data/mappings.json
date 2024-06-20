@@ -1,35 +1,22 @@
 {
   "properties": {
     "doc_text": {
-      "type": "text",
-      "fields": {
-        "keyword": {
-          "type": "keyword",
-          "ignore_above": 256
-        }
-      }
+      "type": "text"
     },
     "doc_embedding": {
       "type": "knn_vector",
-      "dimension": 1024
-    },
-    "doc_id": {
-      "type": "text",
-      "fields": {
-        "keyword": {
-          "type": "keyword",
-          "ignore_above": 256
+      "dimension": 1024,
+      "method": {
+            "name": "hnsw",
+            "space_type": "l2",
+            "engine": "faiss"
         }
-      }
     },
-    "group": {
-      "type": "text",
-      "fields": {
-        "keyword": {
-          "type": "keyword",
-          "ignore_above": 256
-        }
+    "department": {
+      "type": "text"
+      },
+    "access_level": {
+      "type": "text"
       }
-    }
   }
 }
