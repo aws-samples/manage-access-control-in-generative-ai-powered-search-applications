@@ -97,7 +97,7 @@ def handler(event, context):
 
     create_index = event.get('create_index', False)
     model_provider = event.get('model_provider', 'bedrock')
-    model_id = event.get('model_id', 'cohere.embed-multilingual-v3')
+    model_id = event.get('model_id', 'amazon.titan-embed-text-v2:0')
     if create_index:
         index_file_s3_path = event.get('index_file_s3_path')
         mappings_file_s3_path = event.get('mappings_file_s3_path')
@@ -136,7 +136,7 @@ def handler(event, context):
         try:
             formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'research', access_level = 'confidential')
             response = os_client.bulk(body=formatted_bulk_data)
-            
+
             formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'engineering', access_level = 'support')
             response = os_client.bulk(body=formatted_bulk_data)
 
