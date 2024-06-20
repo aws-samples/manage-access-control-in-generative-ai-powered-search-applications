@@ -1,9 +1,4 @@
 import os
-
-os.environ['USER_POOL_ID'] = 'us-west-2_vttcyNAb9'
-
-os.environ['AWS_DEFAULT_REGION'] = "us-west-2"
-
 import json
 import boto3
 import logging
