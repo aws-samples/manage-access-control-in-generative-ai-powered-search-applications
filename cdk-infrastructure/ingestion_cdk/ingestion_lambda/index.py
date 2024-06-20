@@ -1,5 +1,6 @@
 import json
 import boto3
+import zipfile
 import os
 import logging
 from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
@@ -53,17 +54,46 @@ def generate_embdeddings(model_provider: str, model_id: str, doc_text: str) -> l
     return embedding
 
 
-def format_bulk_data_for_os_input(bulk_data: list[dict], index_name: str, model_id: str, model_provider: str) -> list[dict]:
+def format_bulk_data_for_os_input(directory: str, index_name: str, model_id: str, model_provider: str, department: str, access_level: str) -> list[dict]:
     formatted_bulk_data = []
-    for doc in bulk_data:
-        doc["doc_embedding"] = generate_embdeddings(model_provider, model_id, doc['doc_text'])
-        formatted_bulk_data.append({"index": {"_index": index_name, "_id": doc["doc_id"]}})
-        formatted_bulk_data.append(doc)
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt'):
+            doc={}
+            # Construct the full file path
+            file_path = os.path.join(directory, filename)
+        
+            # Open the file and read its contents
+            with open(file_path, 'r') as file:
+                file_contents = file.read()
+        
+            doc["doc_embedding"] = generate_embdeddings(model_provider, model_id, file_contents)
+            doc["department"] = department
+            doc["access_level"] = access_level
+            doc["doc_text"] = file_contents
+            formatted_bulk_data.append({"index": {"_index": index_name, "_id": filename}})
+            
+            formatted_bulk_data.append(doc)
     return formatted_bulk_data
+
+def download_docs():
+        # Specify the bucket name and the file to download
+        file_name = 'docs_os_rag_metadata_use_case.zip'
+
+        # Download the file from S3
+        local_file_path = os.path.join(os.getcwd(), file_name)
+        s3_client.download_file(bucket_name, file_name, local_file_path)
+
+        # Unzip the downloaded file
+        with zipfile.ZipFile(local_file_path, 'r') as zip_ref:
+            zip_ref.extractall(os.getcwd())
+
+        print(f"File '{file_name}' downloaded and unzipped successfully.")
 
 
 def handler(event, context):
     print(event)
+
+    download_docs()
 
     create_index = event.get('create_index', False)
     model_provider = event.get('model_provider', 'bedrock')
@@ -71,10 +101,6 @@ def handler(event, context):
     if create_index:
         index_file_s3_path = event.get('index_file_s3_path')
         mappings_file_s3_path = event.get('mappings_file_s3_path')
-
-    load_data = event.get('load_data', False)
-    if load_data:
-        data_file_s3_path = event.get('data_file_s3_path')
 
     index_name = event.get('index_name', 'test-index')
 
@@ -108,9 +134,12 @@ def handler(event, context):
     if load_data:
         # Perform bulk upload to OpenSearch
         try:
-            bulk_data = load_json_from_s3(data_file_s3_path)
-            formatted_bulk_data = format_bulk_data_for_os_input(bulk_data, index_name, model_id, model_provider)
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'research', access_level = 'confidential')
             response = os_client.bulk(body=formatted_bulk_data)
+            
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'engineering', access_level = 'support')
+            response = os_client.bulk(body=formatted_bulk_data)
+
             logger.warning("Bulk upload completed.")
         except Exception as e:
             logger.error(f"Failed to upload data to OpenSearch. Detailed error: {str(e)}")
