@@ -36,7 +36,7 @@ class IngestionCdkStack(Stack):
         )
 
         bucket_deployment = s3deploy.BucketDeployment(self, "DeployJson",
-            sources=[s3deploy.Source.asset("./ingestion_cdk/data", exclude=["*", "!*.json"])],
+            sources=[s3deploy.Source.asset("./ingestion_cdk/data")],
             destination_bucket=data_bucket,
         )
 
@@ -45,7 +45,8 @@ class IngestionCdkStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_10,
             entry="ingestion_cdk/ingestion_lambda",
             handler="handler",
-            timeout=Duration.seconds(180),
+            timeout=Duration.seconds(900),
+            memory_size= 512,
             environment={
                 "BUCKET_NAME": data_bucket.bucket_name,
                 "AOS_ENDPOINT": aos_endpoint

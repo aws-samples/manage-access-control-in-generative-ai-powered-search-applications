@@ -38,16 +38,14 @@ def create_os_client() -> OpenSearch:
 def generate_embdeddings(model_provider: str, model_id: str, doc_text: str) -> list[float]:
     if model_provider == "bedrock":
         bedrock_runtime = boto3.client("bedrock-runtime", region_name = region)
-        body = json.dumps({"texts": [doc_text],"input_type":"search_document"})
+        body = json.dumps({"inputText": doc_text, "dimensions": 1024})
         response = bedrock_runtime.invoke_model(
             body=body, modelId=model_id, accept="*/*", contentType="application/json"
         )
         response_body = json.loads(response.get("body").read())
 
-        embedding = response_body.get("embeddings")[0]
-    
-        print(f"The embedding vector has {len(embedding)} values\n{embedding[0:3]+['...']+embedding[-3:]}")
-    
+        embedding = response_body.get("embedding")
+        
     else:
         raise ValueError(f"Model provider {model_provider} is not supported.")
 
@@ -56,6 +54,7 @@ def generate_embdeddings(model_provider: str, model_id: str, doc_text: str) -> l
 
 def format_bulk_data_for_os_input(directory: str, index_name: str, model_id: str, model_provider: str, department: str, access_level: str) -> list[dict]:
     formatted_bulk_data = []
+    directory = "/tmp/" + directory
     for filename in os.listdir(directory):
         if filename.endswith('.txt'):
             doc={}
@@ -75,17 +74,17 @@ def format_bulk_data_for_os_input(directory: str, index_name: str, model_id: str
             formatted_bulk_data.append(doc)
     return formatted_bulk_data
 
-def download_docs():
+def download_docs(filename: str):
         # Specify the bucket name and the file to download
         file_name = 'docs_os_rag_metadata_use_case.zip'
 
         # Download the file from S3
-        local_file_path = os.path.join(os.getcwd(), file_name)
+        local_file_path = '/tmp/' + file_name
         s3_client.download_file(bucket_name, file_name, local_file_path)
 
         # Unzip the downloaded file
         with zipfile.ZipFile(local_file_path, 'r') as zip_ref:
-            zip_ref.extractall(os.getcwd())
+            zip_ref.extractall("/tmp/")
 
         print(f"File '{file_name}' downloaded and unzipped successfully.")
 
@@ -93,11 +92,12 @@ def download_docs():
 def handler(event, context):
     print(event)
 
-    download_docs()
+    download_docs(event["data_file_s3_path"])
 
     create_index = event.get('create_index', False)
     model_provider = event.get('model_provider', 'bedrock')
     model_id = event.get('model_id', 'amazon.titan-embed-text-v2:0')
+    load_data = event.get('load_data', True)
     if create_index:
         index_file_s3_path = event.get('index_file_s3_path')
         mappings_file_s3_path = event.get('mappings_file_s3_path')
@@ -134,10 +134,10 @@ def handler(event, context):
     if load_data:
         # Perform bulk upload to OpenSearch
         try:
-            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'confidential', index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'research', access_level = 'confidential')
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'confidential', index_name = index_name, model_id = model_id, model_provider = model_provider, department = 'research', access_level = 'confidential')
             response = os_client.bulk(body=formatted_bulk_data)
 
-            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'support', index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'engineering', access_level = 'support')
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'support', index_name = index_name, model_id = model_id, model_provider = model_provider, department = 'engineering', access_level = 'support')
             response = os_client.bulk(body=formatted_bulk_data)
 
             logger.warning("Bulk upload completed.")

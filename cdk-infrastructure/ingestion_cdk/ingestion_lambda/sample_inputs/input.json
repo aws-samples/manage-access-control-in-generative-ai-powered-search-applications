@@ -3,8 +3,8 @@
     "index_file_s3_path": "index.json",
     "mappings_file_s3_path": "mappings.json",
     "load_data": true,
-    "data_file_s3_path": "bulk_data.json",
+    "data_file_s3_path": "docs_os_rag_metadata_use_case.zip",
     "index_name": "test-index",
     "model_provider": "bedrock",
-    "model_id": "cohere.embed-multilingual-v3"
+    "model_id": "amazon.titan-embed-text-v2:0"
 }
