@@ -134,10 +134,10 @@ def handler(event, context):
     if load_data:
         # Perform bulk upload to OpenSearch
         try:
-            formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'research', access_level = 'confidential')
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'confidential', index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'research', access_level = 'confidential')
             response = os_client.bulk(body=formatted_bulk_data)
 
-            formatted_bulk_data = format_bulk_data_for_os_input(directory = directory_name, index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'engineering', access_level = 'support')
+            formatted_bulk_data = format_bulk_data_for_os_input(directory = 'support', index_name = index_name, model_id = model_id, model_provider = "bedrock", department = 'engineering', access_level = 'support')
             response = os_client.bulk(body=formatted_bulk_data)
 
             logger.warning("Bulk upload completed.")
