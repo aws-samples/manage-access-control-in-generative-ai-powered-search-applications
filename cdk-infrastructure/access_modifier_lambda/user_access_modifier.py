@@ -7,7 +7,6 @@ import logging
 def lambda_handler(event, context):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    print(json.dumps(event['body']))
 
     # Get username and desired cognito attributes from the request body
     body = event.get('body')
