@@ -9,7 +9,7 @@
 
 ### Fn Output
 
-{
+```{
     'statusCode': ...,
     'body': '<assisstant answer to the question>'
-}
+}``````
