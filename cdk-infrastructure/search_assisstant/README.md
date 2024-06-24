@@ -12,6 +12,6 @@
 ```
 {
     'statusCode': ...,
-    'body': '<assisstant answer to the question>'
+    'body': '<answer to the user's question>'
 }
 ```
