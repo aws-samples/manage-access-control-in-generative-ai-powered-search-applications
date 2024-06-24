@@ -12,6 +12,6 @@
 ```
 {
     'statusCode': ...,
-    'body': '<answer to the user's question>'
+    'body': '<an answer to the users' question, based on docs that they have access to>'
 }
 ```
