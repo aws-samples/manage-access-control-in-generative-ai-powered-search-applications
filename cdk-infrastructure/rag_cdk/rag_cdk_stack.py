@@ -81,6 +81,11 @@ class RagCdkStack(Stack):
             self,
             "RestApi",
             description="An API Gateway REST API and an AWS Lambda function.",
+            default_cors_preflight_options={
+                "allow_origins": apigateway.Cors.ALL_ORIGINS,
+                "allow_methods": apigateway.Cors.ALL_METHODS,
+                "allow_headers": ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"],
+            }
         )
 
         # Attach the lambda function to the REST API

@@ -41,7 +41,33 @@ def initialize_opensearch_client():
 def lambda_handler(event, context):
     print("Event: ", json.dumps(event))
 
-    # extract information from event
+    # Handle preflight (OPTIONS) request
+    if event['httpMethod'] == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            },
+            "body": ""
+        }
 
-    # TODO add RAG logic
-    return "200"
+    # Extract information from event
+    # TODO: add RAG logic
+
+    sample_response = {
+        "type": "ai",
+        "content": "Some answers here",
+    }
+
+
+    response = {
+        "statusCode": 200,
+        "headers": {
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps(sample_response)
+    }
+
+    return response
