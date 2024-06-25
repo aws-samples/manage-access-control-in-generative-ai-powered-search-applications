@@ -7,10 +7,10 @@ from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-embedding_model_id = 'amazon.titan-embed-text-v2:0'
-generation_model_id = 'anthropic.claude-3-haiku-20240307-v1:0'
-region = os.environ['AWS_REGION']
-domain_endpoint = os.environ['AOS_ENDPOINT']
+embedding_model_id = "amazon.titan-embed-text-v2:0"
+generation_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
+region = os.environ["AWS_REGION"]
+domain_endpoint = os.environ["AOS_ENDPOINT"]
 index = os.environ["AOS_INDEX"]
 session = boto3.Session()
 
@@ -20,37 +20,40 @@ def initialize_opensearch_client() -> OpenSearch:
     credentials = session.get_credentials()
     auth = AWSV4SignerAuth(credentials, region, "es")
     os_client = OpenSearch(
-        hosts=[{'host': domain_endpoint, 'port': 443}],
+        hosts=[{"host": domain_endpoint, "port": 443}],
         http_auth=auth,
         use_ssl=True,
         verify_certs=True,
         connection_class=RequestsHttpConnection,
-        pool_maxsize=20
+        pool_maxsize=20,
     )
 
     try:
         response = os_client.info()
-        logger.info(f"Connection to OpenSearch successful. Cluster name: {response['cluster_name']}")
+        logger.info(
+            f"Connection to OpenSearch successful. Cluster name: {response['cluster_name']}"
+        )
         return os_client
     except Exception as e:
-        logger.error(f"Connection to OpenSearch failed {domain_endpoint}. Detailed error: {str(e)}")
-
+        logger.error(
+            f"Connection to OpenSearch failed {domain_endpoint}. Detailed error: {str(e)}"
+        )
 
 
 def generate_embdeddings(model_provider: str, model_id: str, text: str) -> list[float]:
     # Generate embeddings for the user query
 
     if model_provider == "bedrock":
-        bedrock_runtime = session.client('bedrock-runtime')
+        bedrock_runtime = session.client("bedrock-runtime")
         body = json.dumps({"inputText": text, "dimensions": 1024})
-        
+
         response = bedrock_runtime.invoke_model(
             body=body, modelId=model_id, accept="*/*", contentType="application/json"
         )
         response_body = json.loads(response.get("body").read())
 
         embedding = response_body.get("embedding")
-    
+
     else:
         raise ValueError(f"Model provider {model_provider} is not supported.")
 
@@ -61,79 +64,79 @@ def get_user_attributes(user_authorization):
     # Get user tags/attributes stored in Cognito pool, that will be infoced in the OpenSearch query
 
     try:
-        cognito =  session.client('cognito-idp')
-        response = cognito.get_user(AccessToken = user_authorization)
-        department=''
-        access_level=''
-        
-        for item in response['UserAttributes']:
-             if item['Name'] == 'custom:department':
-                  department = item['Value']
-             if item['Name'] == 'custom:access_level':
-                  access_level = item['Value']
+        cognito = session.client("cognito-idp")
+        response = cognito.get_user(AccessToken=user_authorization)
+        department = ""
+        access_level = ""
 
-        user_attr = {'department': department, 'access_level': access_level}
+        for item in response["UserAttributes"]:
+            if item["Name"] == "custom:department":
+                department = item["Value"]
+            if item["Name"] == "custom:access_level":
+                access_level = item["Value"]
+
+        user_attr = {"department": department, "access_level": access_level}
 
         logger.info(f"A new query has been submitted by {response['Username']}")
         return user_attr
 
     except Exception as e:
-            logger.error(f"User details retrieval failed with the following error: {str(e)}")
-            error_code = e.response['Error']['Code']
-            error_message = e.response['Error']['Message']
-            print(f"Error creating user: {error_code} - {error_message}")
-            raise e
+        logger.error(
+            f"User details retrieval failed with the following error: {str(e)}"
+        )
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
+        print(f"Error creating user: {error_code} - {error_message}")
+        raise e
+
 
 def query_os(search_query, user_attributes):
     # run an efficient Knn query in OpenSearch
 
     query_vector = generate_embdeddings(
-        model_provider = "bedrock",
-        model_id = embedding_model_id,
-        text = search_query,
+        model_provider="bedrock",
+        model_id=embedding_model_id,
+        text=search_query,
     )
-    
+
     query = {
         "size": 5,
         "query": {
             "knn": {
                 "doc_embedding": {
-                                "vector": query_vector,
-                                "k": 10,
-                                "filter": {
-                                    "bool": {
-                                        "must": [
-                                        {
-                                            "term": {"department": user_attributes["department"]}
-                                        },
-                                        {
-                                            "term": {"access_level": user_attributes["access_level"]}
-                                        }
-                                        ]
+                    "vector": query_vector,
+                    "k": 10,
+                    "filter": {
+                        "bool": {
+                            "must": [
+                                {"term": {"department": user_attributes["department"]}},
+                                {
+                                    "term": {
+                                        "access_level": user_attributes["access_level"]
                                     }
-                                }
-                            }
+                                },
+                            ]
                         }
-                    }
+                    },
                 }
+            }
+        },
+    }
 
     os_client = initialize_opensearch_client()
 
-    response = os_client.search(
-        body = query,
-        index = index
-    )
+    response = os_client.search(body=query, index=index)
 
     docs = []
     doc = {}
-    
-    if response['hits']['max_score'] > 0.3:
-        for hit in response['hits']['hits']:
-            if hit['_score'] > 0.3:
-                doc['doc_name'] = hit['_id']
-                doc['score'] = hit['_score']
-                doc['doc_content'] = hit['_source']['doc_text'] 
-                docs.append(doc)    
+
+    if response["hits"]["max_score"] > 0.3:
+        for hit in response["hits"]["hits"]:
+            if hit["_score"] > 0.3:
+                doc["doc_name"] = hit["_id"]
+                doc["score"] = hit["_score"]
+                doc["doc_content"] = hit["_source"]["doc_text"]
+                docs.append(doc)
     return docs
 
 
@@ -151,24 +154,31 @@ def generate_answers(user_question, docs):
             Skip preambles and go straight to the answer.
             
             """
-    body= json.dumps({
-    "anthropic_version": "bedrock-2023-05-31",
-    "max_tokens":400,
-    "messages": [{"role": "user", "content": [{"type": "text","text": prompt}]}],
-    "temperature":0})
+    body = json.dumps(
+        {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 400,
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": prompt}]}
+            ],
+            "temperature": 0,
+        }
+    )
 
-    bedrock_runtime = session.client('bedrock-runtime')
+    bedrock_runtime = session.client("bedrock-runtime")
 
-    b_response = json.loads(bedrock_runtime.invoke_model(modelId='', body=body).get('body').read())
+    b_response = json.loads(
+        bedrock_runtime.invoke_model(modelId="", body=body).get("body").read()
+    )
     return b_response
 
 
 def handler(event, context):
     # Get event content
-    authorization = event['headers']['x-access-token']
-    
-    body = json.loads(event['body'])
-    query = body['prompt']
+    authorization = event["headers"]["x-access-token"]
+
+    body = json.loads(event["body"])
+    query = body["prompt"]
 
     try:
         user_attributes = get_user_attributes(authorization)
@@ -176,13 +186,10 @@ def handler(event, context):
         response = generate_answers(query, docs)
 
     except Exception as e:
-            logger.error(f"Query failed with the following error: {str(e)}")
-            error_code = e.response['Error']['Code']
-            error_message = e.response['Error']['Message']
-            print(f"Error {error_code}: - {error_message}")
-            raise e
-    
-    return {
-        'statusCode': 200,
-        'body': f"{response['content'][0]['text']}"
-    }
+        logger.error(f"Query failed with the following error: {str(e)}")
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
+        print(f"Error {error_code}: - {error_message}")
+        raise e
+
+    return {"statusCode": 200, "body": f"{response['content'][0]['text']}"}
