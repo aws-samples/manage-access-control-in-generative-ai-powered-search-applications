@@ -163,11 +163,12 @@ def generate_answers(user_question, docs):
     return b_response
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     # Get event content
-    authorization = event['headers']['Authorization']
+    authorization = event['headers']['x-access-token']
     
-    query = event.get('body')['prompt']
+    body = json.loads(event['body'])
+    query = body['prompt']
 
     try:
         user_attributes = get_user_attributes(authorization)

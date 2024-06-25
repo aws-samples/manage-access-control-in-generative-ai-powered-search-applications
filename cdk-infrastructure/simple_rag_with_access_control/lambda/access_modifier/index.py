@@ -4,7 +4,7 @@ import boto3
 import logging
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
