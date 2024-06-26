@@ -8,4 +8,4 @@ venv/*
 # CDK asset staging directory
 .cdk.staging
 cdk.out
-
+test_users_logins.txt
