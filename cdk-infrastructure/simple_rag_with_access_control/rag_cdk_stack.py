@@ -46,6 +46,7 @@ class RAGCdkStack(Stack):
                 app_log_enabled=True,
                 slow_index_log_enabled=True,
             ),
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Add Cognito user pool
@@ -63,6 +64,7 @@ class RAGCdkStack(Stack):
                     min_len=1, max_len=100, mutable=True
                 ),
             },
+            removal_policy=RemovalPolicy.DESTROY
         )
         user_pool_client = cognito.UserPoolClient(
             self,
@@ -204,8 +206,8 @@ class RAGCdkStack(Stack):
                 "AccessModifierLambdaExecutionPolicy",
                 statements=[
                     iam.PolicyStatement(
-                        actions=["cognito-idp:AdminUpdateUserAttributes"],
-                        resources=[user_pool.user_pool_arn],
+                        actions=["cognito-idp:AdminUpdateUserAttributes", "cognito-idp:ListUsers"],
+                        resources=[user_pool.user_pool_arn, f"{user_pool.user_pool_arn}/*"],
                         effect=iam.Effect.ALLOW,
                     ),
                 ],
@@ -256,6 +258,12 @@ class RAGCdkStack(Stack):
         access_resource = api.root.add_resource("access")
         access_resource.add_method(
             "POST",
+            access_modifier_lambda_integration,
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+        access_resource.add_method(
+            "GET",
             access_modifier_lambda_integration,
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
