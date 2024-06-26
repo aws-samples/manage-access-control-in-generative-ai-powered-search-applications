@@ -122,7 +122,7 @@ class RAGCdkStack(Stack):
             self,
             "AOSClient",
             user_pool=user_pool,
-            auth_flows={"user_password": True},
+            auth_flows={"user_password": True, "user_srp": True},
         )
         cognito.UserPoolDomain(
             self,
