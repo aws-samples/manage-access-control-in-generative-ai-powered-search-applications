@@ -9,7 +9,7 @@ def handler(event, context):
     logger.setLevel(logging.INFO)
 
     # Get username and desired cognito attributes from the request body
-    body = event.get("body")
+    body = json.loads(event.get("body"))
     username = body["username"]
     user_attributes = body["attributes"]
     user_attributes_modified = []

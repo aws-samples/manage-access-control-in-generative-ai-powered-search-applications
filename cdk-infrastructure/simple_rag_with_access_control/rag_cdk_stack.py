@@ -205,7 +205,7 @@ class RAGCdkStack(Stack):
                 statements=[
                     iam.PolicyStatement(
                         actions=["cognito-idp:AdminUpdateUserAttributes"],
-                        resources=[f"{user_pool.user_pool_arn}/*"],
+                        resources=[user_pool.user_pool_arn],
                         effect=iam.Effect.ALLOW,
                     ),
                 ],
@@ -302,4 +302,9 @@ class RAGCdkStack(Stack):
             "APIGWInvokeEndpoint",
             "APIGWInvokeEndpoint",
             f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod/invoke",
+        )
+        self.add_to_param_store(
+            "APIGWModifyAttributesEndpoint",
+            "APIGWModifyAttributesEndpoint",
+            f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod/access",
         )
