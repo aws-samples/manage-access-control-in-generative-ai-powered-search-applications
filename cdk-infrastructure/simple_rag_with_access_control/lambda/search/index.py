@@ -168,7 +168,7 @@ def generate_answers(user_question, docs):
     bedrock_runtime = session.client("bedrock-runtime")
 
     b_response = json.loads(
-        bedrock_runtime.invoke_model(modelId="", body=body).get("body").read()
+        bedrock_runtime.invoke_model(modelId=generation_model_id, body=body).get("body").read()
     )
     return b_response
 
@@ -180,16 +180,12 @@ def handler(event, context):
     body = json.loads(event["body"])
     query = body["prompt"]
 
-    try:
-        user_attributes = get_user_attributes(authorization)
-        docs = query_os(query, user_attributes)
-        response = generate_answers(query, docs)
+    user_attributes = get_user_attributes(authorization)
+    docs = query_os(query, user_attributes)
+    response = generate_answers(query, docs)
+    result = {
+        "type": "ai",
+        "content": response['content'][0]['text']
+    }
 
-    except Exception as e:
-        logger.error(f"Query failed with the following error: {str(e)}")
-        error_code = e.response["Error"]["Code"]
-        error_message = e.response["Error"]["Message"]
-        print(f"Error {error_code}: - {error_message}")
-        raise e
-
-    return {"statusCode": 200, "body": f"{response['content'][0]['text']}"}
+    return {"statusCode": 200, "body": json.dumps(result)}

@@ -11,7 +11,13 @@ def handler(event, context):
     # Get username and desired cognito attributes from the request body
     body = event.get("body")
     username = body["username"]
-    user_attributes = body["userAttributes"]
+    user_attributes = body["attributes"]
+    user_attributes_modified = []
+    for attr in user_attributes:
+        user_attributes_modified.append({
+            "Name": attr["name"],
+            "Value": attr["value"]
+        })
 
     logger.info(
         f"Received request to modify user {username} with attributes {user_attributes}"
@@ -24,7 +30,7 @@ def handler(event, context):
     # Update the user's attributes in Cognito
     try:
         response = cognito.admin_update_user_attributes(
-            UserAttributes=[user_attributes], Username=username, UserPoolId=user_pool_id
+            UserAttributes=user_attributes_modified, Username=username, UserPoolId=user_pool_id
         )
 
         print(response)
