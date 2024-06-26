@@ -14,24 +14,24 @@ def handle_post_request(body: dict) -> dict:
     user_attributes = body["attributes"]
     user_attributes_modified = []
     for attr in user_attributes:
-        user_attributes_modified.append({
-            "Name": attr["name"],
-            "Value": attr["value"]
-        })
+        user_attributes_modified.append({"Name": attr["name"], "Value": attr["value"]})
 
-    logger.info(f"Received request to modify user {username} with attributes {user_attributes}")
+    logger.info(
+        f"Received request to modify user {username} with attributes {user_attributes}"
+    )
 
     # Update the user's attributes in Cognito
     cognito.admin_update_user_attributes(
-        UserAttributes=user_attributes_modified, 
-        Username=username, 
-        UserPoolId=user_pool_id
+        UserAttributes=user_attributes_modified,
+        Username=username,
+        UserPoolId=user_pool_id,
     )
 
     return {
         "statusCode": 200,
         "body": json.dumps(f"User '{username}' updated successfully."),
     }
+
 
 def handle_get_requests() -> dict:
     # Handle GET request to list all users with custom attributes
@@ -41,10 +41,7 @@ def handle_get_requests() -> dict:
     users_with_attributes = []
     for user in users:
         users_with_attributes.append(
-            {
-                "username": user["Username"],
-                "attributes": user["Attributes"]
-            }
+            {"username": user["Username"], "attributes": user["Attributes"]}
         )
 
     logger.info(f"Retrieved {len(users_with_attributes)} users from Cognito.")
@@ -54,18 +51,17 @@ def handle_get_requests() -> dict:
         "body": json.dumps({"users": users_with_attributes}),
     }
 
-def handler(event, context):
-    http_method = event['httpMethod']
-    
 
-    if http_method == 'POST':
+def handler(event, context):
+    http_method = event["httpMethod"]
+
+    if http_method == "POST":
         # Handle POST request to modify user attributes
         return handle_post_request(json.loads(event.get("body")))
-       
-    
-    elif http_method == 'GET':
-       return handle_get_requests()
-    
+
+    elif http_method == "GET":
+        return handle_get_requests()
+
     else:
         # Handle unsupported HTTP methods
         return {

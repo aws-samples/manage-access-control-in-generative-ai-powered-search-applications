@@ -14,12 +14,10 @@ from aws_cdk import (
 )
 from constructs import Construct
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
+from typing import Tuple, Dict
 
 
 class RAGCdkStack(Stack):
-
-    def add_to_param_store(self, id: str, name: str, value: str) -> None:
-        ssm.StringParameter(self, id, parameter_name=name, string_value=value)
 
     def __init__(
         self, scope: Construct, construct_id: str, config: dict, **kwargs
@@ -27,7 +25,61 @@ class RAGCdkStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Create OpenSearch domain
-        prod_domain = aos.Domain(
+        prod_domain = self.create_opensearch_domain()
+
+        # Create Cognito user pool and client
+        user_pool, user_pool_client = self.create_cognito_user_pool(config)
+
+        # Add S3 bucket for data
+        data_bucket = self.create_s3_bucket()
+
+        # Deploy data to S3 bucket
+        self.deploy_data_to_s3_bucket(data_bucket)
+
+        # Add Lambda functions
+        ingestion_lambda_function = self.create_lambda_function(
+            "DataIngestionLambda",
+            "simple_rag_with_access_control/lambda/ingestion",
+            {
+                "BUCKET_NAME": data_bucket.bucket_name,
+                "AOS_ENDPOINT": prod_domain.domain_endpoint,
+            },
+            self.get_ingestion_lambda_policy(data_bucket, prod_domain),
+        )
+
+        search_lambda = self.create_lambda_function(
+            "SearchLambdaFunction",
+            "simple_rag_with_access_control/lambda/search",
+            {"AOS_ENDPOINT": prod_domain.domain_endpoint, "AOS_INDEX": "test-index"},
+            self.get_search_lambda_policy(user_pool, prod_domain),
+        )
+
+        access_modifier_lambda = self.create_lambda_function(
+            "AccessModifierLambdaFunction",
+            "simple_rag_with_access_control/lambda/access_modifier",
+            {"USER_POOL_ID": user_pool.user_pool_id},
+            self.get_access_modifier_lambda_policy(user_pool),
+        )
+
+        # Create API Gateway and endpoints
+        api = self.create_api_gateway()
+        self.create_api_methods(api, search_lambda, access_modifier_lambda, user_pool)
+
+        # Add OpenSearch domain access policies
+        self.add_opensearch_access_policies(
+            prod_domain, ingestion_lambda_function, search_lambda
+        )
+
+        # Store parameters in SSM
+        self.store_parameters_in_ssm(
+            prod_domain, user_pool, user_pool_client, data_bucket, api
+        )
+
+    def add_to_param_store(self, id: str, name: str, value: str) -> None:
+        ssm.StringParameter(self, id, parameter_name=name, string_value=value)
+
+    def create_opensearch_domain(self) -> aos.Domain:
+        return aos.Domain(
             self,
             "AosDomain",
             version=aos.EngineVersion.OPENSEARCH_2_11,
@@ -46,10 +98,12 @@ class RAGCdkStack(Stack):
                 app_log_enabled=True,
                 slow_index_log_enabled=True,
             ),
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # Add Cognito user pool
+    def create_cognito_user_pool(
+        self, config: dict
+    ) -> Tuple[cognito.UserPool, cognito.UserPoolClient]:
         user_pool = cognito.UserPool(
             self,
             "AOSUserPool",
@@ -60,21 +114,17 @@ class RAGCdkStack(Stack):
                 "access_level": cognito.StringAttribute(
                     min_len=1, max_len=100, mutable=True
                 ),
-                "role": cognito.StringAttribute(
-                    min_len=1, max_len=100, mutable=True
-                ),
+                "role": cognito.StringAttribute(min_len=1, max_len=100, mutable=True),
             },
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
         )
         user_pool_client = cognito.UserPoolClient(
             self,
             "AOSClient",
             user_pool=user_pool,
-            auth_flows={
-                "user_password": True,
-            },
+            auth_flows={"user_password": True},
         )
-        user_pool_domain = cognito.UserPoolDomain(
+        cognito.UserPoolDomain(
             self,
             "Domain",
             user_pool=user_pool,
@@ -82,141 +132,120 @@ class RAGCdkStack(Stack):
                 domain_prefix=config["COGNITO_DOMAIN_PREFIX"]
             ),
         )
+        return user_pool, user_pool_client
 
-        # Add S3 bucket data
-        data_bucket = s3.Bucket(
+    def create_s3_bucket(self) -> s3.Bucket:
+        return s3.Bucket(
             self, "S3BucketForDataIngestion", removal_policy=RemovalPolicy.DESTROY
         )
 
-        bucket_deployment = s3deploy.BucketDeployment(
+    def deploy_data_to_s3_bucket(self, bucket: s3.Bucket) -> None:
+        s3deploy.BucketDeployment(
             self,
             "DeployJson",
             sources=[s3deploy.Source.asset("./simple_rag_with_access_control/data")],
-            destination_bucket=data_bucket,
+            destination_bucket=bucket,
         )
 
-        # Add Ingestion Lambda
-        ingestion_lambda_function = PythonFunction(
+    def create_lambda_function(
+        self, id: str, entry: str, environment: Dict[str, str], policy: iam.Policy
+    ) -> PythonFunction:
+        lambda_function = PythonFunction(
             self,
-            "DataIngestionLambda",
+            id,
             runtime=_lambda.Runtime.PYTHON_3_11,
-            entry="simple_rag_with_access_control/lambda/ingestion",
+            entry=entry,
             handler="handler",
             timeout=Duration.seconds(900),
             memory_size=512,
-            environment={
-                "BUCKET_NAME": data_bucket.bucket_name,
-                "AOS_ENDPOINT": prod_domain.domain_endpoint,
-            },
+            environment=environment,
         )
-        ingestion_lambda_function.role.attach_inline_policy(
-            iam.Policy(
-                self,
-                "IngestionLambdaExecutionPolicy",
-                statements=[
-                    iam.PolicyStatement(
-                        actions=["s3:GetObject"],
-                        resources=[data_bucket.bucket_arn + "/*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                    iam.PolicyStatement(
-                        actions=[
-                            "es:ESHttpPost",
-                            "es:ESHttpPut",
-                            "es:ESHttpGet",
-                            "es:ESHttpDelete",
-                        ],
-                        resources=[prod_domain.domain_arn + "/*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                    iam.PolicyStatement(
-                        actions=["bedrock:InvokeModel"],
-                        resources=["*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                ],
-            )
-        )
+        lambda_function.role.attach_inline_policy(policy)
+        return lambda_function
 
-        # Lambda Function for API Gateway
-        search_lambda = PythonFunction(
+    def get_ingestion_lambda_policy(
+        self, bucket: s3.Bucket, domain: aos.Domain
+    ) -> iam.Policy:
+        return iam.Policy(
             self,
-            "SearchLambdaFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            entry="simple_rag_with_access_control/lambda/search",
-            handler="handler",
-            memory_size=512,
-            environment={
-                "AOS_ENDPOINT": prod_domain.domain_endpoint,
-                "AOS_INDEX": "test-index",
-            },
-            timeout=Duration.seconds(300),
+            "IngestionLambdaExecutionPolicy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=["s3:GetObject"],
+                    resources=[bucket.bucket_arn + "/*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+                iam.PolicyStatement(
+                    actions=[
+                        "es:ESHttpPost",
+                        "es:ESHttpPut",
+                        "es:ESHttpGet",
+                        "es:ESHttpDelete",
+                    ],
+                    resources=[domain.domain_arn + "/*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+                iam.PolicyStatement(
+                    actions=["bedrock:InvokeModel"],
+                    resources=["*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+            ],
         )
 
-        search_lambda.role.attach_inline_policy(
-            iam.Policy(
-                self,
-                "SearchLambdaExecutionPolicy",
-                statements=[
-                    iam.PolicyStatement(
-                        actions=[
-                            "bedrock:InvokeModel",
-                            "bedrock:InvokeModelWithResponseStream",
-                        ],
-                        resources=["*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                    iam.PolicyStatement(
-                        actions=[
-                            "es:ESHttpPost",
-                            "es:ESHttpPut",
-                            "es:ESHttpGet",
-                            "es:ESHttpDelete",
-                        ],
-                        resources=[prod_domain.domain_arn + "/*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                    iam.PolicyStatement(
-                        actions=["cognito-idp:GetUser"],
-                        resources=[f"{user_pool.user_pool_arn}/*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                ],
-            )
-        )
-
-        # Lambda Function for API Gateway
-        access_modifier_lambda = PythonFunction(
+    def get_search_lambda_policy(
+        self, user_pool: cognito.UserPool, domain: aos.Domain
+    ) -> iam.Policy:
+        return iam.Policy(
             self,
-            "AccessModifierLambdaFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            entry="simple_rag_with_access_control/lambda/access_modifier",
-            handler="handler",
-            memory_size=512,
-            environment={
-                "USER_POOL_ID": user_pool.user_pool_id,
-            },
-            timeout=Duration.seconds(300),
+            "SearchLambdaExecutionPolicy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "bedrock:InvokeModel",
+                        "bedrock:InvokeModelWithResponseStream",
+                    ],
+                    resources=["*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+                iam.PolicyStatement(
+                    actions=[
+                        "es:ESHttpPost",
+                        "es:ESHttpPut",
+                        "es:ESHttpGet",
+                        "es:ESHttpDelete",
+                    ],
+                    resources=[domain.domain_arn + "/*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+                iam.PolicyStatement(
+                    actions=["cognito-idp:GetUser"],
+                    resources=[f"{user_pool.user_pool_arn}/*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+            ],
         )
 
-
-        access_modifier_lambda.role.attach_inline_policy(
-            iam.Policy(
-                self,
-                "AccessModifierLambdaExecutionPolicy",
-                statements=[
-                    iam.PolicyStatement(
-                        actions=["cognito-idp:AdminUpdateUserAttributes", "cognito-idp:ListUsers"],
-                        resources=[user_pool.user_pool_arn, f"{user_pool.user_pool_arn}/*"],
-                        effect=iam.Effect.ALLOW,
-                    ),
-                ],
-            )
+    def get_access_modifier_lambda_policy(
+        self, user_pool: cognito.UserPool
+    ) -> iam.Policy:
+        return iam.Policy(
+            self,
+            "AccessModifierLambdaExecutionPolicy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "cognito-idp:AdminUpdateUserAttributes",
+                        "cognito-idp:ListUsers",
+                    ],
+                    resources=[user_pool.user_pool_arn, f"{user_pool.user_pool_arn}/*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+            ],
         )
 
-
-        # API Gateway REST API
-        api = apigateway.RestApi(
+    def create_api_gateway(self) -> apigateway.RestApi:
+        return apigateway.RestApi(
             self,
             "RestApi",
             description="An API Gateway REST API and an AWS Lambda function.",
@@ -226,86 +255,90 @@ class RAGCdkStack(Stack):
             ),
         )
 
-        # Attach the lambda function to the REST API
-        search_lambda_integration = apigateway.LambdaIntegration(search_lambda)
-        access_modifier_lambda_integration = apigateway.LambdaIntegration(access_modifier_lambda)
+    def create_api_methods(
+        self,
+        api: apigateway.RestApi,
+        search_lambda: PythonFunction,
+        access_modifier_lambda: PythonFunction,
+        user_pool: cognito.UserPool,
+    ) -> None:
 
-
-        # Create a Cognito user pool authorizer
-        user_pool = cognito.UserPool.from_user_pool_arn(
-            self, "ImportedUserPool", user_pool_arn=user_pool.user_pool_arn
-        )
         authorizer = apigateway.CognitoUserPoolsAuthorizer(
             self, "CognitoAuthorizer", cognito_user_pools=[user_pool]
         )
 
-        # Create a resource and method
-        invoke_resource = api.root.add_resource("invoke")
-        invoke_resource.add_method(
-            "POST",
-            search_lambda_integration,
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
+        self.add_api_method(
+            api, "invoke", ["POST"], search_lambda, authorizer
+        )
+        self.add_api_method(
+            api,
+            "access",
+            ["POST", "GET"],
+            access_modifier_lambda,
+            authorizer,
         )
 
-        # Allow the lambda function to be invoked by the API Gateway
-        search_lambda.add_permission(
-            "InvokeModelLambdaPermission",
+    def add_api_method(
+        self,
+        api: apigateway.RestApi,
+        method_name: str,
+        http_methods: list[str],
+        lambda_function: PythonFunction,
+        authorizer: apigateway.CognitoUserPoolsAuthorizer,
+    ) -> None:
+        resource = api.root.add_resource(method_name)
+        integration = apigateway.LambdaIntegration(lambda_function)
+        for method in http_methods:
+            resource.add_method(
+                method,
+                integration,
+                authorizer=authorizer,
+                authorization_type=apigateway.AuthorizationType.COGNITO,
+            )
+        lambda_function.add_permission(
+            f"InvokePermission{method}",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.rest_api_id}/*",
         )
 
-        access_resource = api.root.add_resource("access")
-        access_resource.add_method(
-            "POST",
-            access_modifier_lambda_integration,
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-        access_resource.add_method(
-            "GET",
-            access_modifier_lambda_integration,
-            authorizer=authorizer,
-            authorization_type=apigateway.AuthorizationType.COGNITO,
-        )
-
-        # Allow the lambda function to be invoked by the API Gateway
-        access_modifier_lambda.add_permission(
-            "InvokeModelLambdaPermission",
-            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
-            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.rest_api_id}/*",
-        )
-
-        # Add OpenSearch domain level access policy
-        prod_domain.add_access_policies(
+    def add_opensearch_access_policies(
+        self,
+        domain: aos.Domain,
+        ingestion_lambda: PythonFunction,
+        search_lambda: PythonFunction,
+    ) -> None:
+        domain.add_access_policies(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 principals=[
-                    iam.ArnPrincipal(ingestion_lambda_function.role.role_arn),
+                    iam.ArnPrincipal(ingestion_lambda.role.role_arn),
                     iam.ArnPrincipal(search_lambda.role.role_arn),
                 ],
                 actions=["es:ESHttp*"],
-                resources=[f"{prod_domain.domain_arn}/*"],
+                resources=[f"{domain.domain_arn}/*"],
             )
         )
-        
+
+    def store_parameters_in_ssm(
+        self,
+        domain: aos.Domain,
+        user_pool: cognito.UserPool,
+        user_pool_client: cognito.UserPoolClient,
+        bucket: s3.Bucket,
+        api: apigateway.RestApi,
+    ) -> None:
         self.add_to_param_store(
-            "AosEndpointParam", "AosEndpoint", prod_domain.domain_endpoint
+            "AosEndpointParam", "AosEndpoint", domain.domain_endpoint
         )
-        self.add_to_param_store("AosArnParam", "AosArn", prod_domain.domain_arn)
+        self.add_to_param_store("AosArnParam", "AosArn", domain.domain_arn)
         self.add_to_param_store(
             "UserPoolArn", "CognitoUserPoolArn", user_pool.user_pool_arn
         )
-
         self.add_to_param_store(
             "UserPoolClientID", "UserPoolClientID", user_pool_client.user_pool_client_id
         )
-        self.add_to_param_store(
-            "UserPoolID", "UserPoolID", user_pool.user_pool_id
-        )
-        self.add_to_param_store(
-            "DataBucketName", "DataBucketName", data_bucket.bucket_name
-        )
+        self.add_to_param_store("UserPoolID", "UserPoolID", user_pool.user_pool_id)
+        self.add_to_param_store("DataBucketName", "DataBucketName", bucket.bucket_name)
         self.add_to_param_store(
             "APIGWInvokeEndpoint",
             "APIGWInvokeEndpoint",
