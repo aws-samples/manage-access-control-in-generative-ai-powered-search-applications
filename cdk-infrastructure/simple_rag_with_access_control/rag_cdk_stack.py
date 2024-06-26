@@ -53,13 +53,13 @@ class RAGCdkStack(Stack):
             self,
             "AOSUserPool",
             custom_attributes={
-                "custom:department": cognito.StringAttribute(
+                "department": cognito.StringAttribute(
                     min_len=1, max_len=100, mutable=True
                 ),
-                "custom:access_level": cognito.StringAttribute(
+                "access_level": cognito.StringAttribute(
                     min_len=1, max_len=100, mutable=True
                 ),
-                "custom:role": cognito.StringAttribute(
+                "role": cognito.StringAttribute(
                     min_len=1, max_len=100, mutable=True
                 ),
             },
@@ -176,12 +176,43 @@ class RAGCdkStack(Stack):
                     ),
                     iam.PolicyStatement(
                         actions=["cognito-idp:GetUser"],
-                        resources=["*"],
+                        resources=[f"{user_pool.user_pool_arn}/*"],
                         effect=iam.Effect.ALLOW,
                     ),
                 ],
             )
         )
+
+        # Lambda Function for API Gateway
+        access_modifier_lambda = PythonFunction(
+            self,
+            "AccessModifierLambdaFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            entry="simple_rag_with_access_control/lambda/access_modifier",
+            handler="handler",
+            memory_size=512,
+            environment={
+                "USER_POOL_ID": user_pool.user_pool_id,
+            },
+            timeout=Duration.seconds(300),
+        )
+
+
+        access_modifier_lambda.role.attach_inline_policy(
+            iam.Policy(
+                self,
+                "AccessModifierLambdaExecutionPolicy",
+                statements=[
+                    iam.PolicyStatement(
+                        actions=["cognito-idp:AdminUpdateUserAttributes"],
+                        resources=[f"{user_pool.user_pool_arn}/*"],
+                        effect=iam.Effect.ALLOW,
+                    ),
+                ],
+            )
+        )
+
+
         # API Gateway REST API
         api = apigateway.RestApi(
             self,
@@ -194,7 +225,9 @@ class RAGCdkStack(Stack):
         )
 
         # Attach the lambda function to the REST API
-        lambda_integration = apigateway.LambdaIntegration(search_lambda)
+        search_lambda_integration = apigateway.LambdaIntegration(search_lambda)
+        access_modifier_lambda_integration = apigateway.LambdaIntegration(access_modifier_lambda)
+
 
         # Create a Cognito user pool authorizer
         user_pool = cognito.UserPool.from_user_pool_arn(
@@ -208,13 +241,28 @@ class RAGCdkStack(Stack):
         invoke_resource = api.root.add_resource("invoke")
         invoke_resource.add_method(
             "POST",
-            lambda_integration,
+            search_lambda_integration,
             authorizer=authorizer,
             authorization_type=apigateway.AuthorizationType.COGNITO,
         )
 
         # Allow the lambda function to be invoked by the API Gateway
         search_lambda.add_permission(
+            "InvokeModelLambdaPermission",
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.rest_api_id}/*",
+        )
+
+        access_resource = api.root.add_resource("access")
+        access_resource.add_method(
+            "POST",
+            access_modifier_lambda_integration,
+            authorizer=authorizer,
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+        )
+
+        # Allow the lambda function to be invoked by the API Gateway
+        access_modifier_lambda.add_permission(
             "InvokeModelLambdaPermission",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.rest_api_id}/*",
@@ -232,7 +280,7 @@ class RAGCdkStack(Stack):
                 resources=[f"{prod_domain.domain_arn}/*"],
             )
         )
-
+        
         self.add_to_param_store(
             "AosEndpointParam", "AosEndpoint", prod_domain.domain_endpoint
         )
@@ -240,8 +288,15 @@ class RAGCdkStack(Stack):
         self.add_to_param_store(
             "UserPoolArn", "CognitoUserPoolArn", user_pool.user_pool_arn
         )
+
         self.add_to_param_store(
             "UserPoolClientID", "UserPoolClientID", user_pool_client.user_pool_client_id
+        )
+        self.add_to_param_store(
+            "UserPoolID", "UserPoolID", user_pool.user_pool_id
+        )
+        self.add_to_param_store(
+            "DataBucketName", "DataBucketName", data_bucket.bucket_name
         )
         self.add_to_param_store(
             "APIGWInvokeEndpoint",
