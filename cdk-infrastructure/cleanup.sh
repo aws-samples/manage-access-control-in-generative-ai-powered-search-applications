@@ -1,10 +1,5 @@
 #!/bin/bash
 
-export AWS_DEFAULT_REGION=us-east-1
-CURRENT_DIR=$(pwd)
-
-# Back to the current directory
-cd $CURRENT_DIR
 # Get the S3 bucket name from SSM Parameter Store
 S3_BUCKET=$(aws ssm get-parameter --name "DataBucketName" --query "Parameter.Value" --output text)
 

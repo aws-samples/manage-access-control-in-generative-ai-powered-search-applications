@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Set your AWS region
-AWS_REGION="us-east-1"
-
 # Set the SSM parameter names
 API_ENDPOINT_PARAM="APIGWInvokeEndpoint"
 USER_POOL_ID_PARAM="UserPoolID"
