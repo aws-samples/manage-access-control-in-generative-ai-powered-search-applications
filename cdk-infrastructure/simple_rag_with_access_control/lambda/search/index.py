@@ -175,8 +175,23 @@ def generate_answers(user_question, docs):
     return b_response
 
 
+def handle_options_method():
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, x-access-token",
+        },
+        "body": "",
+    }
+
+
 def handler(event, context):
     # Get event content
+    if event['httpMethod'] == 'OPTIONS':
+        return handle_options_method()
+    
     authorization = event["headers"]["x-access-token"]
 
     body = json.loads(event["body"])
@@ -187,4 +202,8 @@ def handler(event, context):
     response = generate_answers(query, docs)
     result = {"type": "ai", "content": response["content"][0]["text"]}
 
-    return {"statusCode": 200, "body": json.dumps(result)}
+    return {
+        "statusCode": 200,
+        "headers": {"Access-Control-Allow-Origin": "*"},
+        "body": json.dumps(result),
+    }

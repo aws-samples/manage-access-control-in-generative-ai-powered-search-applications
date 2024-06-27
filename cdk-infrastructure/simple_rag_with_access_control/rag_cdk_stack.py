@@ -252,6 +252,7 @@ class RAGCdkStack(Stack):
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=apigateway.Cors.ALL_ORIGINS,
                 allow_methods=apigateway.Cors.ALL_METHODS,
+                allow_headers=["*"]
             ),
         )
 
@@ -267,9 +268,7 @@ class RAGCdkStack(Stack):
             self, "CognitoAuthorizer", cognito_user_pools=[user_pool]
         )
 
-        self.add_api_method(
-            api, "invoke", ["POST"], search_lambda, authorizer
-        )
+        self.add_api_method(api, "invoke", ["POST"], search_lambda, authorizer)
         self.add_api_method(
             api,
             "access",

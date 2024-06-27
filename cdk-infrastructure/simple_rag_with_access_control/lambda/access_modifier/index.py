@@ -29,6 +29,7 @@ def handle_post_request(body: dict) -> dict:
 
     return {
         "statusCode": 200,
+        "headers": {"Access-Control-Allow-Origin": "*"},
         "body": json.dumps(f"User '{username}' updated successfully."),
     }
 
@@ -48,7 +49,20 @@ def handle_get_requests() -> dict:
 
     return {
         "statusCode": 200,
+        "headers": {"Access-Control-Allow-Origin": "*"},
         "body": json.dumps({"users": users_with_attributes}),
+    }
+
+
+def handle_options_method():
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+        "body": "",
     }
 
 
@@ -58,6 +72,9 @@ def handler(event, context):
     if http_method == "POST":
         # Handle POST request to modify user attributes
         return handle_post_request(json.loads(event.get("body")))
+    
+    elif http_method == "OPTIONS":
+        return handle_options_method()
 
     elif http_method == "GET":
         return handle_get_requests()
