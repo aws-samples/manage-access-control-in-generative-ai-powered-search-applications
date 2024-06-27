@@ -338,10 +338,5 @@ class RAGCdkStack(Stack):
         self.add_to_param_store(
             "APIGWInvokeEndpoint",
             "APIGWInvokeEndpoint",
-            f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod/invoke",
-        )
-        self.add_to_param_store(
-            "APIGWModifyAttributesEndpoint",
-            "APIGWModifyAttributesEndpoint",
-            f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod/access",
+            f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod",
         )

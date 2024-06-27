@@ -12,7 +12,7 @@ deploy-cdk:
 deploy-cdk-with-mock-users:
 	@cd cdk-infrastructure && cdk deploy && ./create_test_users.sh
 
-create-mock-users:
+mock-users:
 	@cd cdk-infrastructure && ./create_test_users.sh
 
 destroy:
@@ -23,6 +23,8 @@ install-frontend:
 
 run-frontend:
 	@cd frontend && ./get_envs.sh && npm run dev
+
+install-run-frontend: install-frontend run-frontend
 
 style:
 	@cd cdk-infrastructure && isort simple_rag_with_access_control/. && black .

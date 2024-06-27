@@ -18,7 +18,7 @@ fi
 echo "Cognito User Pool ID: $USER_POOL_ID"
 
 # File to store login information
-OUTPUT_FILE="test_users_logins.txt"
+OUTPUT_FILE="mock_users.txt"
 
 # Clear the output file if it exists
 > $OUTPUT_FILE
