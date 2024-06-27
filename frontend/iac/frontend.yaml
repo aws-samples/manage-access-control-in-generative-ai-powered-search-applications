@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+
+Parameters:
+  FrontendRepository:
+    Type: String
+    Description: "The repository URL for the frontend application."
+
+  GitHubTokenSecretName:
+    Type: String
+    Description: "The name of the secrets storing GitHub token for accessing the repository."
+
+  SsmAmplifyViteApiEndpoint:
+    Type: String
+    Description: "The name of the SSM parameter storing API endpoint for Vite."
+    Default: APIGWInvokeEndpoint
+
+  SsmAmplifyViteUserPoolId:
+    Type: String
+    Description: "The User Pool ID for the Amplify Vite app."
+    Default: UserPoolID
+
+  SsmAmplifyViteUserPoolClientId:
+    Type: String
+    Description: "The User Pool Client ID for the Amplify Vite app."
+    Default: UserPoolClientID
+
+Resources:
+  AmplifyFrontendApp:
+    Type: "AWS::Amplify::App"
+    Properties:
+      Name: !Sub "${AWS::StackName}-${AWS::Region}-${AWS::AccountId}"
+      Repository: !Ref FrontendRepository
+      BuildSpec: |
+        version: 1
+        applications:
+          - frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - npm ci
+                build:
+                  commands:
+                    - npm run build
+              artifacts:
+                baseDirectory: dist
+                files:
+                  - '**/*'
+              cache:
+                paths:
+                  - node_modules/**/*
+            appRoot: frontend
+      AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecretName}}}"
+      EnvironmentVariables:
+        - Name: "AMPLIFY_MONOREPO_APP_ROOT"
+          Value: "frontend"
+        - Name: "VITE_REGION"
+          Value: !Ref "AWS::Region"
+        - Name: "VITE_API_ENDPOINT"
+          Value: !Sub "{{resolve:ssm:${SsmAmplifyViteApiEndpoint}}}"
+        - Name: "VITE_USER_POOL_ID"
+          Value: !Sub "{{resolve:ssm:${SsmAmplifyViteUserPoolId}}}"
+        - Name: "VITE_USER_POOL_CLIENT_ID"
+          Value: !Sub "{{resolve:ssm:${SsmAmplifyViteUserPoolClientId}}}"
+
+  AmplifyBranch:
+    Type: "AWS::Amplify::Branch"
+    Properties:
+      BranchName: "main"
+      AppId: !GetAtt AmplifyFrontendApp.AppId
+      EnableAutoBuild: true

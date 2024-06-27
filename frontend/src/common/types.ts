@@ -1,27 +1,18 @@
-export interface Document {
-  documentid: string;
-  userid: string;
-  filename: string;
-  filesize: string;
-  docstatus: string;
-  created: string;
-  pages: string;
-  conversations: {
-    conversationid: string;
-    created: string;
-  }[];
+export interface CognitoAttributes {
+  Name: string;
+  Value: string;
 }
 
-export interface Conversation {
-  messages: {
-    type: string;
-    content: string;
-  }[];
+export interface UnicornUser {
+  username: string;
+  attributes: UnicornAttributes;
 }
 
-export interface Attribute {
-  attributes: {
-    name: string;
-    value: string;
-  }[];
+export interface UnicornAttributes {
+  [key: string]: string;
+}
+
+export interface CognitoUser {
+  username: string;
+  attributes: CognitoAttributes[];
 }

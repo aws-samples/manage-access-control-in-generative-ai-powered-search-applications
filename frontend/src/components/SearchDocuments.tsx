@@ -1,9 +1,8 @@
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import Loading from "../../public/loading-dots.svg";
-import { Conversation } from "../common/types";
 
-interface ChatMessagesProps {
-  conversation: Conversation;
+interface SearchDocumentsProps {
+  searchResults: string | null;
   messageStatus: string;
   handlePromptChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handleKeyPress: (event: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -11,9 +10,9 @@ interface ChatMessagesProps {
   submitMessage: () => Promise<void>;
 }
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({
+const SearchDocuments: React.FC<SearchDocumentsProps> = ({
   prompt,
-  conversation,
+  searchResults,
   messageStatus,
   submitMessage,
   handlePromptChange,
@@ -21,32 +20,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 }) => {
   return (
     <div className="flex flex-col justify-between h-full overflow-y-auto col-span-8 p-5 border-l border-gray-200">
-      <div className="pb-5">
-        <div className="grid gap-5">
-          {conversation.messages.map((message, i) => (
-            <div
-              className={`${
-                message.type === "ai"
-                  ? "justify-self-start w-fit rounded border border-gray-100 px-5 py-3.5 text-gray-800"
-                  : "" +
-                    "justify-self-end w-fit bg-slate-100 rounded border border-gray-100 px-5 py-3.5 text-gray-800"
-              }`}
-              key={i}
-            >
-              <div className="prose">
-                <p>{message.content}</p>
-              </div>
-            </div>
-          ))}
-          {messageStatus === "loading" && (
-            <div className="justify-self-start w-fit rounded border border-gray-100 px-5 py-3.5 text-gray-800">
-              <img src={Loading} width={40} className="py-2 mx-2" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="relative w-full">
         <div className="relative">
           <input
             disabled={messageStatus === "loading"}
@@ -61,8 +34,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 : "block w-full p-4 pl-4 text-sm text-gray-900 border border-gray-200 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
             }
             placeholder={
-              // "Ask " + conversation.document.filename + " anything..."
-              "Ask me anything..."
+              "Search anything ..."
             }
           />
           {messageStatus === "idle" && (
@@ -71,7 +43,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
               className="text-gray-700 absolute right-2 bottom-2 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2"
               onClick={submitMessage}
             >
-              <PaperAirplaneIcon className="w-6 h-6" />
+              <MagnifyingGlassIcon className="w-6 h-6" />
             </button>
           )}
           {messageStatus === "loading" && (
@@ -100,9 +72,27 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </button>
           )}
         </div>
+
+      <div className="relative w-full pt-5">
+        <div className="">
+          <div className="grid gap-5">
+            {messageStatus === "idle" && searchResults && (  
+                <div className="justify-self-start w-full rounded border border-gray-100 px-5 py-3.5 text-gray-800">
+                  <div className="prose">
+                    <p>{searchResults}</p>
+                  </div>
+                </div>
+            )}
+            {messageStatus === "loading" && (
+              <div className="justify-self-start w-full rounded border border-gray-100 px-5 py-3.5 text-gray-800">
+                <img src={Loading} width={40} className="py-2 mx-2" />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default ChatMessages;
+export default SearchDocuments;
