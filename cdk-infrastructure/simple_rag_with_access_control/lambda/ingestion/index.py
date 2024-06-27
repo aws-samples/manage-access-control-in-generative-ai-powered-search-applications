@@ -1,9 +1,10 @@
 import json
-import boto3
-import zipfile
-import os
 import logging
-from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
+import os
+import zipfile
+
+import boto3
+from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

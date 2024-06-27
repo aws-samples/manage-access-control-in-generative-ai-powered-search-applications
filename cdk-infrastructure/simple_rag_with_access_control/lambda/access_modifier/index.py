@@ -1,7 +1,8 @@
 import json
 import logging
-import boto3
 import os
+
+import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -72,7 +73,7 @@ def handler(event, context):
     if http_method == "POST":
         # Handle POST request to modify user attributes
         return handle_post_request(json.loads(event.get("body")))
-    
+
     elif http_method == "OPTIONS":
         return handle_options_method()
 

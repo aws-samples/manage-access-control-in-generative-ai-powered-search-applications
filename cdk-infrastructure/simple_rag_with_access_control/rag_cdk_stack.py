@@ -1,20 +1,17 @@
 import json
-from aws_cdk import (
-    Stack,
-    aws_opensearchservice as aos,
-    aws_cognito as cognito,
-    aws_iam as iam,
-    aws_ssm as ssm,
-    aws_s3 as s3,
-    aws_lambda as _lambda,
-    aws_s3_deployment as s3deploy,
-    aws_apigateway as apigateway,
-    RemovalPolicy,
-    Duration,
-)
-from constructs import Construct
+from typing import Dict, Tuple
+
+from aws_cdk import Duration, RemovalPolicy, Stack
+from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_opensearchservice as aos
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_s3_deployment as s3deploy
+from aws_cdk import aws_ssm as ssm
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
-from typing import Tuple, Dict
+from constructs import Construct
 
 
 class RAGCdkStack(Stack):
@@ -252,7 +249,7 @@ class RAGCdkStack(Stack):
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=apigateway.Cors.ALL_ORIGINS,
                 allow_methods=apigateway.Cors.ALL_METHODS,
-                allow_headers=["*"]
+                allow_headers=["*"],
             ),
         )
 

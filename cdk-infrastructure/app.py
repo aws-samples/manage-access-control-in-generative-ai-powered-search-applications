@@ -2,6 +2,7 @@
 import os
 
 import aws_cdk as cdk
+
 from simple_rag_with_access_control.rag_cdk_stack import RAGCdkStack
 
 

@@ -1,9 +1,10 @@
 ## Bedrock based generation
-import os
 import json
-import boto3
 import logging
-from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
+import os
+
+import boto3
+from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -189,9 +190,9 @@ def handle_options_method():
 
 def handler(event, context):
     # Get event content
-    if event['httpMethod'] == 'OPTIONS':
+    if event["httpMethod"] == "OPTIONS":
         return handle_options_method()
-    
+
     authorization = event["headers"]["x-access-token"]
 
     body = json.loads(event["body"])

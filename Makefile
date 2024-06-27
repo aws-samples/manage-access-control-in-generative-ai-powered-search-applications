@@ -1,7 +1,7 @@
 init:
 	python3 -m venv venv
 	source venv/bin/activate
-	@cd cdk-infrastructure && pip install -r requirements.txt
+	@cd cdk-infrastructure && pip install -r requirements.txt && pip install -r requirements-dev.txt
 
 bootstrap-cdk:
 	@cd cdk-infrastructure && npx cdk bootstrap
@@ -23,3 +23,6 @@ install-frontend:
 
 run-frontend:
 	@cd frontend && ./get_envs.sh && npm run dev
+
+style:
+	@cd cdk-infrastructure && isort simple_rag_with_access_control/. && black .
