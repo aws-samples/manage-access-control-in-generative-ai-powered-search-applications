@@ -5,7 +5,9 @@ import {
   ChevronDownIcon,
   TagIcon,
 } from "@heroicons/react/24/outline";
+import { Auth } from 'aws-amplify';
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
+import { useState, useEffect} from 'react';
 
 interface NavigationProps {
   userInfo: any;
@@ -18,6 +20,25 @@ const Navigation: React.FC<NavigationProps> = ({
   userInfo,
   handleSignOutClick,
 }: NavigationProps) => {
+  const [role, setRole] = useState<string | null>(null);
+
+  const fetchAdmin = async () => {
+    try {
+      const { attributes } = await Auth.currentUserInfo();
+      // console.log(`The username: ${username}`);
+      // console.log(`The role: ${attributes['custom:role']}`);
+      // console.log(`The department: ${attributes['custom:department']}`);
+      // console.log(`The access_control: ${attributes['custom:access_control']}`);
+      setRole(attributes['custom:role'])
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  useEffect(() => {
+    fetchAdmin()
+  }, []);
+
   return (
     <nav className="bg-sky-700">
       <div className="container flex flex-wrap items-center justify-between py-3">
@@ -29,10 +50,19 @@ const Navigation: React.FC<NavigationProps> = ({
           UnicornChat
         </Link>
         <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
+          {role === 'admin' && <div className="relative ml-3">
+            <Link
+                to="/attribute"
+                className="group w-full inline-flex items-center rounded-md px-2 py-2 text-sm text-white underline-offset-2 hover:underline"
+            >
+              <TagIcon className="w-4 h-4 mr-1" />
+              Manage Attributes
+            </Link>
+          </div>}
           <div className="relative ml-3">
             <Menu>
               <Menu.Button className="text-center inline-flex items-center text-white text-sm underline-offset-2 hover:underline">
-                {userInfo?.attributes?.email}
+                {userInfo?.username}
                 <ChevronDownIcon className="w-3 h-3 ml-1 text-white" />
               </Menu.Button>
               <Menu.Items className="absolute right-0 z-10 mt-2 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
@@ -45,15 +75,6 @@ const Navigation: React.FC<NavigationProps> = ({
                       <ArrowLeftOnRectangleIcon className="w-4 h-4 mr-1" />
                       Sign Out
                     </button>
-                  </Menu.Item>
-                  <Menu.Item>
-                  <Link
-                    to="/attribute"
-                    className="group w-full inline-flex items-center rounded-md px-2 py-2 text-sm underline-offset-2 hover:underline"
-                  >
-                      <TagIcon className="w-4 h-4 mr-1" />
-                      Manage Attributes
-                    </Link>
                   </Menu.Item>
                 </div>
               </Menu.Items>
