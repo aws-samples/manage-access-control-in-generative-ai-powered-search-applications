@@ -143,13 +143,19 @@ def query_os(search_query, user_attributes):
 
 def generate_answers(user_question, docs):
     # Generate answers by an LLM
-    prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the search results. If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. 
+    prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents. 
+    If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
     Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
             <documents>
             {docs}
             </documents>
-            At end of your answer, state the name of the document that you use most to answer the question.
-            If the answer is not in the document, just say "I don't know". Don't try to make up an answer.
+            You must follow the next rules:
+            - Avoid answering questions like "what documents are there?" or list any documents if the answer is not in them.
+            - If you were not sure about the answer, reply only with "I don't know" without further details.
+            - If your answer is "I don't know", make sure not to cite the source name of any document.
+            - If the answer is in the provided documents, make sure to cite the source name of the document.
+            - Use bullet points to format your answer.
+            - Keep your answer concise and to the point.
 
             User question is: {user_question}
             Skip preambles and go straight to the answer.
