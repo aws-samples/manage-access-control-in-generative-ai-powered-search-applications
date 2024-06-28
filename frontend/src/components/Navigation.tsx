@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   TagIcon,
 } from "@heroicons/react/24/outline";
+import UnicornLogo from '../../public/favicon.ico'
 import { Auth } from 'aws-amplify';
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import { useState, useEffect} from 'react';
@@ -40,14 +41,14 @@ const Navigation: React.FC<NavigationProps> = ({
   }, []);
 
   return (
-    <nav className="bg-sky-700">
+    <nav className="bg-fuchsia-400">
       <div className="container flex flex-wrap items-center justify-between py-3">
         <Link
           to="/"
           className="inline-flex items-center self-center text-2xl font-semibold whitespace-nowrap text-white"
         >
-          <ChatBubbleLeftRightIcon className="w-6 h-6 mr-1.5" />
-          UnicornChat
+          <img src={UnicornLogo} className="w-6 h-6 mr-1.5" />
+          Unicorn Robotics Factory
         </Link>
         <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
           {role === 'admin' && <div className="relative ml-3">

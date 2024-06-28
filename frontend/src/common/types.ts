@@ -16,3 +16,8 @@ export interface CognitoUser {
   username: string;
   attributes: CognitoAttributes[];
 }
+
+export interface RequestStatus {
+  status: string;
+  message: string;
+}
