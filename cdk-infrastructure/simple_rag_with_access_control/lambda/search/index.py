@@ -61,24 +61,23 @@ def generate_embdeddings(model_provider: str, model_id: str, text: str) -> list[
     return embedding
 
 
-def get_user_attributes(user_authorization):
-    # Get user tags/attributes stored in Cognito pool, that will be infoced in the OpenSearch query
-
+def get_user_attributes(user_authorization: str) -> dict[str, list]:
     try:
         cognito = session.client("cognito-idp")
         response = cognito.get_user(AccessToken=user_authorization)
-        department = ""
-        access_level = ""
+        department = []
+        access_level = []
 
         for item in response["UserAttributes"]:
             if item["Name"] == "custom:department":
-                department = item["Value"]
+                department = [value.strip() for value in item["Value"].split(",")]
             if item["Name"] == "custom:access_level":
-                access_level = item["Value"]
+                access_level = [value.strip() for value in item["Value"].split(",")]
 
         user_attr = {"department": department, "access_level": access_level}
 
         logger.info(f"A new query has been submitted by {response['Username']}")
+        print(user_attr)
         return user_attr
 
     except Exception as e:
@@ -91,7 +90,7 @@ def get_user_attributes(user_authorization):
         raise e
 
 
-def query_os(search_query, user_attributes):
+def query_os(search_query: str, user_attributes: dict[str, list]) -> list[dict]:
     # run an efficient Knn query in OpenSearch
 
     query_vector = generate_embdeddings(
@@ -110,10 +109,22 @@ def query_os(search_query, user_attributes):
                     "filter": {
                         "bool": {
                             "must": [
-                                {"term": {"department": user_attributes["department"]}},
                                 {
-                                    "term": {
-                                        "access_level": user_attributes["access_level"]
+                                    "bool": {
+                                        "should": [
+                                            {"term": {"department": dept}}
+                                            for dept in user_attributes["department"]
+                                        ],
+                                        "minimum_should_match": 1,
+                                    }
+                                },
+                                {
+                                    "bool": {
+                                        "should": [
+                                            {"term": {"access_level": level}}
+                                            for level in user_attributes["access_level"]
+                                        ],
+                                        "minimum_should_match": 1,
                                     }
                                 },
                             ]
@@ -123,15 +134,13 @@ def query_os(search_query, user_attributes):
             }
         },
     }
-
     os_client = initialize_opensearch_client()
 
     response = os_client.search(body=query, index=index)
-
     docs = []
     doc = {}
 
-    if response["hits"]["max_score"] > 0.3:
+    if response["hits"]["max_score"] and response["hits"]["max_score"] > 0.3:
         for hit in response["hits"]["hits"]:
             if hit["_score"] > 0.3:
                 doc["doc_name"] = hit["_id"]
