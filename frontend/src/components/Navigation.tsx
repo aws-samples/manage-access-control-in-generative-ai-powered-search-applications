@@ -7,7 +7,6 @@ import {
 } from "@heroicons/react/24/outline";
 import UnicornLogo from '../../public/favicon.ico'
 import { Auth } from 'aws-amplify';
-import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/solid";
 import { useState, useEffect} from 'react';
 
 interface NavigationProps {
@@ -26,10 +25,6 @@ const Navigation: React.FC<NavigationProps> = ({
   const fetchAdmin = async () => {
     try {
       const { attributes } = await Auth.currentUserInfo();
-      // console.log(`The username: ${username}`);
-      // console.log(`The role: ${attributes['custom:role']}`);
-      // console.log(`The department: ${attributes['custom:department']}`);
-      // console.log(`The access_control: ${attributes['custom:access_control']}`);
       setRole(attributes['custom:role'])
     } catch (err) {
       console.log(err);
