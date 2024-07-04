@@ -12,6 +12,7 @@ embedding_model_id = "amazon.titan-embed-text-v2:0"
 generation_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
 region = os.environ["AWS_REGION"]
 domain_endpoint = os.environ["AOS_ENDPOINT"]
+custom_attributes = os.environ["CUSTOM_ATTRIBUTES"]
 index = os.environ["AOS_INDEX"]
 session = boto3.Session()
 
@@ -65,16 +66,19 @@ def get_user_attributes(user_authorization: str) -> dict[str, list]:
     try:
         cognito = session.client("cognito-idp")
         response = cognito.get_user(AccessToken=user_authorization)
-        department = []
-        access_level = []
+        user_attr = {}
+
+        custom_attr_list = custom_attributes.split(",")
 
         for item in response["UserAttributes"]:
-            if item["Name"] == "custom:department":
-                department = [value.strip() for value in item["Value"].split(",")]
-            if item["Name"] == "custom:access_level":
-                access_level = [value.strip() for value in item["Value"].split(",")]
-
-        user_attr = {"department": department, "access_level": access_level}
+            if (
+                item["Name"].startswith("custom:")
+                and item["Name"][7:] in custom_attr_list
+            ):
+                attr_name = item["Name"][7:]  # Remove 'custom:' prefix
+                user_attr[attr_name] = [
+                    value.strip() for value in item["Value"].split(",")
+                ]
 
         logger.info(f"A new query has been submitted by {response['Username']}")
         print(user_attr)
@@ -91,13 +95,22 @@ def get_user_attributes(user_authorization: str) -> dict[str, list]:
 
 
 def query_os(search_query: str, user_attributes: dict[str, list]) -> list[dict]:
-    # run an efficient Knn query in OpenSearch
-
     query_vector = generate_embdeddings(
         model_provider="bedrock",
         model_id=embedding_model_id,
         text=search_query,
     )
+
+    must_conditions = []
+    for attr, values in user_attributes.items():
+        must_conditions.append(
+            {
+                "bool": {
+                    "should": [{"term": {attr: value}} for value in values],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
 
     query = {
         "size": 5,
@@ -106,46 +119,25 @@ def query_os(search_query: str, user_attributes: dict[str, list]) -> list[dict]:
                 "doc_embedding": {
                     "vector": query_vector,
                     "k": 10,
-                    "filter": {
-                        "bool": {
-                            "must": [
-                                {
-                                    "bool": {
-                                        "should": [
-                                            {"term": {"department": dept}}
-                                            for dept in user_attributes["department"]
-                                        ],
-                                        "minimum_should_match": 1,
-                                    }
-                                },
-                                {
-                                    "bool": {
-                                        "should": [
-                                            {"term": {"access_level": level}}
-                                            for level in user_attributes["access_level"]
-                                        ],
-                                        "minimum_should_match": 1,
-                                    }
-                                },
-                            ]
-                        }
-                    },
+                    "filter": {"bool": {"must": must_conditions}},
                 }
             }
         },
     }
+
     os_client = initialize_opensearch_client()
 
     response = os_client.search(body=query, index=index)
     docs = []
-    doc = {}
 
     if response["hits"]["max_score"] and response["hits"]["max_score"] > 0.3:
         for hit in response["hits"]["hits"]:
             if hit["_score"] > 0.3:
-                doc["doc_name"] = hit["_id"]
-                doc["score"] = hit["_score"]
-                doc["doc_content"] = hit["_source"]["doc_text"]
+                doc = {
+                    "doc_name": hit["_id"],
+                    "score": hit["_score"],
+                    "doc_content": hit["_source"]["doc_text"],
+                }
                 docs.append(doc)
     return docs
 

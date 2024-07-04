@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Tuple
+from pathlib import Path
 
 from aws_cdk import Duration, RemovalPolicy, Stack
 from aws_cdk import aws_apigateway as apigateway
@@ -21,6 +21,9 @@ class RAGCdkStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # load custom attributes for Cognito
+        self.custom_attributes = config["CUSTOM_ATTRIBUTES"]
+
         # Create OpenSearch domain
         prod_domain = self.create_opensearch_domain()
 
@@ -40,6 +43,7 @@ class RAGCdkStack(Stack):
             {
                 "BUCKET_NAME": data_bucket.bucket_name,
                 "AOS_ENDPOINT": prod_domain.domain_endpoint,
+                "CUSTOM_ATTRIBUTES": self.custom_attributes,
             },
             self.get_ingestion_lambda_policy(data_bucket, prod_domain),
         )
@@ -47,7 +51,11 @@ class RAGCdkStack(Stack):
         search_lambda = self.create_lambda_function(
             "SearchLambdaFunction",
             "simple_rag_with_access_control/lambda/search",
-            {"AOS_ENDPOINT": prod_domain.domain_endpoint, "AOS_INDEX": "test-index"},
+            {
+                "AOS_ENDPOINT": prod_domain.domain_endpoint,
+                "AOS_INDEX": "test-index-3",
+                "CUSTOM_ATTRIBUTES": self.custom_attributes,
+            },
             self.get_search_lambda_policy(user_pool, prod_domain),
         )
 
@@ -100,19 +108,19 @@ class RAGCdkStack(Stack):
 
     def create_cognito_user_pool(
         self, config: dict
-    ) -> Tuple[cognito.UserPool, cognito.UserPoolClient]:
+    ) -> tuple[cognito.UserPool, cognito.UserPoolClient]:
+        cognito_custom_attrs = {}
+        for custom_attr in self.custom_attributes.split(","):
+            cognito_custom_attrs[custom_attr] = cognito.StringAttribute(
+                min_len=1, max_len=100, mutable=True
+            )
+        cognito_custom_attrs["role"] = cognito.StringAttribute(
+            min_len=1, max_len=100, mutable=True
+        )
         user_pool = cognito.UserPool(
             self,
             "AOSUserPool",
-            custom_attributes={
-                "department": cognito.StringAttribute(
-                    min_len=1, max_len=100, mutable=True
-                ),
-                "access_level": cognito.StringAttribute(
-                    min_len=1, max_len=100, mutable=True
-                ),
-                "role": cognito.StringAttribute(min_len=1, max_len=100, mutable=True),
-            },
+            custom_attributes=cognito_custom_attrs,
             removal_policy=RemovalPolicy.DESTROY,
         )
         user_pool_client = cognito.UserPoolClient(
@@ -145,7 +153,7 @@ class RAGCdkStack(Stack):
         )
 
     def create_lambda_function(
-        self, id: str, entry: str, environment: Dict[str, str], policy: iam.Policy
+        self, id: str, entry: str, environment: dict[str, str], policy: iam.Policy
     ) -> PythonFunction:
         lambda_function = PythonFunction(
             self,

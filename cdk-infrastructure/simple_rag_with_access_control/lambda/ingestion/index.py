@@ -16,7 +16,7 @@ s3_client = boto3.client("s3")
 bucket_name = os.environ["BUCKET_NAME"]
 region = os.environ["AWS_REGION"]
 domain_endpoint = os.environ["AOS_ENDPOINT"]
-index_name = None
+custom_attributes = os.environ["CUSTOM_ATTRIBUTES"]
 
 
 # Helper function to load JSON from S3
@@ -24,6 +24,13 @@ def load_json_from_s3(filename: str) -> dict:
     file = s3_client.get_object(Bucket=bucket_name, Key=filename)
     return json.loads(file["Body"].read().decode("utf-8"))
 
+
+def add_extra_mapping_attributes(mappings: dict) -> dict:
+    for attr in custom_attributes.split(","):
+        mappings["properties"][attr] = {
+            "type": "text"
+        }
+    return mappings
 
 def create_os_client() -> OpenSearch:
     credentials = boto3.Session().get_credentials()
@@ -57,16 +64,18 @@ def generate_embdeddings(
     return embedding
 
 
-def format_bulk_data_for_os_input(
+def bulk_data_upload_to_os(
+    data_file_name: str,
     directory: str,
     index_name: str,
     model_id: str,
     model_provider: str,
-    department: str,
-    access_level: str,
+    os_client: boto3.client
 ) -> list[dict]:
     formatted_bulk_data = []
-    directory = "/tmp/" + directory
+    directory = f"/tmp/{data_file_name.split('.')[0]}/{directory}"
+    print(directory)
+    print(os.listdir("/tmp/")) 
     for filename in os.listdir(directory):
         if filename.endswith(".txt"):
             doc = {}
@@ -80,20 +89,33 @@ def format_bulk_data_for_os_input(
             doc["doc_embedding"] = generate_embdeddings(
                 model_provider, model_id, file_contents
             )
-            doc["department"] = department
-            doc["access_level"] = access_level
             doc["doc_text"] = file_contents
+
+            # Read metadata from associated JSON file
+            json_filename = os.path.splitext(filename)[0] + '.json'
+            json_file_path = os.path.join(directory, json_filename)
+            if os.path.exists(json_file_path):
+                with open(json_file_path, 'r') as json_file:
+                    metadata = json.load(json_file)
+                    doc.update(metadata)
+            else:
+                logger.warning(f"No metadata file found for {filename}")
+
             formatted_bulk_data.append(
                 {"index": {"_index": index_name, "_id": filename}}
             )
 
             formatted_bulk_data.append(doc)
-    return formatted_bulk_data
+        if len(formatted_bulk_data) == 400: # bulk upload 400 documents at a time
+            os_client.bulk(body=formatted_bulk_data)
+            print("Successfully uploaded a bulk document")
+            formatted_bulk_data = []
+
+    os_client.bulk(body=formatted_bulk_data)
 
 
-def download_docs(filename: str):
-    # Specify the bucket name and the file to download
-    file_name = "docs_os_rag_metadata_use_case.zip"
+
+def download_docs(file_name: str):
 
     # Download the file from S3
     local_file_path = "/tmp/" + file_name
@@ -108,13 +130,14 @@ def download_docs(filename: str):
 
 def handler(event, context):
     print(event)
-
-    download_docs(event["data_file_s3_path"])
+    data_file_name = event["data_file_s3_path"]
+    download_docs(data_file_name)
 
     create_index = event.get("create_index", False)
     model_provider = event.get("model_provider", "bedrock")
     model_id = event.get("model_id", "amazon.titan-embed-text-v2:0")
     load_data = event.get("load_data", True)
+
     if create_index:
         index_file_s3_path = event.get("index_file_s3_path")
         mappings_file_s3_path = event.get("mappings_file_s3_path")
@@ -132,9 +155,11 @@ def handler(event, context):
 
     if create_index:
         # Creating index with settings and mappings
+        mappings = load_json_from_s3(mappings_file_s3_path)
+        mappings = add_extra_mapping_attributes(mappings)
         index_body = {
             "settings": load_json_from_s3(index_file_s3_path),
-            "mappings": load_json_from_s3(mappings_file_s3_path),
+            "mappings": mappings,
         }
 
         # Create index and mappings
@@ -154,33 +179,14 @@ def handler(event, context):
 
     if load_data:
         # Perform bulk upload to OpenSearch
-        try:
-            formatted_bulk_data = format_bulk_data_for_os_input(
-                directory="confidential",
-                index_name=index_name,
-                model_id=model_id,
-                model_provider=model_provider,
-                department="research",
-                access_level="confidential",
-            )
-            response = os_client.bulk(body=formatted_bulk_data)
-
-            formatted_bulk_data = format_bulk_data_for_os_input(
-                directory="support",
-                index_name=index_name,
-                model_id=model_id,
-                model_provider=model_provider,
-                department="engineering",
-                access_level="support",
-            )
-            response = os_client.bulk(body=formatted_bulk_data)
-
-            logger.warning("Bulk upload completed.")
-        except Exception as e:
-            logger.error(
-                f"Failed to upload data to OpenSearch. Detailed error: {str(e)}"
-            )
-            raise e
+        bulk_data_upload_to_os(
+            data_file_name=data_file_name,
+            directory="data",
+            index_name=index_name,
+            model_id=model_id,
+            model_provider=model_provider,
+            os_client=os_client
+        )
 
         # Query OpenSearch to verify bulk upload
         query_body = {"query": {"match_all": {}}}
