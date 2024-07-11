@@ -4,6 +4,9 @@ import logging
 import os
 
 import boto3
+from sagemaker.predictor import Predictor
+from sagemaker.serializers import JSONSerializer
+from sagemaker.deserializers import JSONDeserializer
 from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 logger = logging.getLogger()
@@ -14,7 +17,6 @@ region = os.environ["AWS_REGION"]
 domain_endpoint = os.environ["AOS_ENDPOINT"]
 index = os.environ["AOS_INDEX"]
 session = boto3.Session()
-
 
 def initialize_opensearch_client() -> OpenSearch:
     # Create an OpenSearch client
@@ -131,7 +133,7 @@ def query_os(search_query, user_attributes):
     docs = []
     doc = {}
 
-    if response["hits"]["max_score"] > 0.3:
+    if response["hits"]["max_score"] and response["hits"]["max_score"] > 0.3:
         for hit in response["hits"]["hits"]:
             if hit["_score"] > 0.3:
                 doc["doc_name"] = hit["_id"]
@@ -142,7 +144,77 @@ def query_os(search_query, user_attributes):
 
 
 def generate_answers(user_question, docs):
-    # Generate answers by an LLM
+
+    try:
+        # Retrieve parameters
+        ssm = session.client('ssm')
+        UseLlmEndpoint, LlmEndpointName = retrieve_llm_parameters(ssm)
+
+    except Exception as e:
+        print(f"Failed to retrieve parameters: {e}")
+
+    if UseLlmEndpoint:
+        response = generate_sagemaker_answer(user_question, docs, LlmEndpointName)
+    else:
+        response = generate_bedrock_answer(user_question, docs)
+    
+    return response
+
+def retrieve_llm_parameters(ssm):
+
+    response = ssm.get_parameters(
+            Names= ["UseLlmEndpoint", "LlmEndpointName"]
+    )
+
+    # Extract the parameter value into a dictionary
+    parameters = {param['Name']: param['Value'] for param in response['Parameters']}
+        
+    # Extract parameters
+    UseLlmEndpoint = parameters.get('UseLlmEndpoint','False') == 'True'
+    LlmEndpointName = parameters.get('LlmEndpointName')
+    
+    return UseLlmEndpoint,LlmEndpointName
+
+def generate_sagemaker_answer(user_question, docs, LlmEndpointName):
+    # initiate sagemaker llm endpoint name
+    predictor = Predictor(
+            endpoint_name=LlmEndpointName,
+            serializer=JSONSerializer(),
+            deserializer=JSONDeserializer()
+        )
+
+    prompt = {
+            "inputs":  
+            [
+                [
+                {"role": "system", "content": "You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents."},
+                {"role": "user", "content": f"""If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
+                    Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
+                            <documents>
+                            {docs}
+                            </documents>
+                            You must follow the next rules:
+                            - Avoid answering questions like "what documents are there?" or list any documents if the answer is not in them.
+                            - If you were not sure about the answer, reply only with "I don't know" without further details.
+                            - If your answer is "I don't know", make sure not to cite the source name of any document.
+                            - If the answer is in the provided documents, make sure to cite the source name of the document.
+                            - Use bullet points to format your answer.
+                            - Keep your answer concise and to the point.
+                            User question is: {user_question}
+                            Skip preambles and go straight to the answer.
+                            """},
+                ]   
+            ],
+            "parameters":{"max_new_tokens":400, "top_p":0.9, "temperature":0.01}
+        }
+
+        # Make a prediction
+    prediction = predictor.predict(prompt, custom_attributes="accept_eula=true")
+    sm_response = prediction.pop().get('generation').get('content')
+
+    return sm_response
+
+def generate_bedrock_answer(user_question, docs):
     prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents. 
     If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
     Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
@@ -156,10 +228,8 @@ def generate_answers(user_question, docs):
             - If the answer is in the provided documents, make sure to cite the source name of the document.
             - Use bullet points to format your answer.
             - Keep your answer concise and to the point.
-
             User question is: {user_question}
             Skip preambles and go straight to the answer.
-            
             """
     body = json.dumps(
         {
@@ -179,7 +249,8 @@ def generate_answers(user_question, docs):
         .get("body")
         .read()
     )
-    return b_response
+    
+    return b_response["content"][0]["text"]
 
 
 def handle_options_method():
@@ -199,15 +270,23 @@ def handler(event, context):
     if event["httpMethod"] == "OPTIONS":
         return handle_options_method()
 
-    authorization = event["headers"]["x-access-token"]
+    try: 
+        authorization = event["headers"]["x-access-token"]
 
-    body = json.loads(event["body"])
-    query = body["prompt"]
+        body = json.loads(event["body"])
+        query = body["prompt"]
 
-    user_attributes = get_user_attributes(authorization)
-    docs = query_os(query, user_attributes)
-    response = generate_answers(query, docs)
-    result = {"type": "ai", "content": response["content"][0]["text"]}
+        user_attributes = get_user_attributes(authorization)
+        docs = query_os(query, user_attributes)
+        response = generate_answers(query, docs)
+        result = {"type": "ai", "content": response}
+    except Exception as e:
+        logger.error(
+            f"Search failed with the following error: {str(e)}"
+        )
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
+        result = {"type": "error", "content": f"Opps... something's gone wrong. Check with Unicorn admin. Error code: {error_code}; Error message: {error_message}."}
 
     return {
         "statusCode": 200,
