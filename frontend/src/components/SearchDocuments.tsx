@@ -1,5 +1,7 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import Loading from "../../public/loading-dots.svg";
+import ReactMarkdown from 'react-markdown';
+
 
 interface SearchDocumentsProps {
   searchResults: string | null;
@@ -79,7 +81,7 @@ const SearchDocuments: React.FC<SearchDocumentsProps> = ({
             {messageStatus === "idle" && searchResults && (  
                 <div className="justify-self-start w-full rounded border border-gray-100 px-5 py-3.5 text-gray-800">
                   <div className="prose">
-                    <p>{searchResults}</p>
+                    <ReactMarkdown>{searchResults}</ReactMarkdown>
                   </div>
                 </div>
             )}

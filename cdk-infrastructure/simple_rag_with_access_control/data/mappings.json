@@ -11,12 +11,6 @@
             "space_type": "l2",
             "engine": "faiss"
         }
-    },
-    "department": {
-      "type": "text"
-      },
-    "access_level": {
-      "type": "text"
-      }
+    }
   }
 }
