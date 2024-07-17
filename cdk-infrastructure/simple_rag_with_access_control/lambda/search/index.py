@@ -149,15 +149,32 @@ def generate_answers(user_question, docs):
     try:
         # Retrieve parameters
         ssm = session.client('ssm')
-        UseLlmEndpoint, LlmEndpointName = retrieve_llm_parameters(ssm)
+        use_llm_endpoint, llm_endpoint_name = retrieve_llm_parameters(ssm)
 
     except Exception as e:
         print(f"Failed to retrieve parameters: {e}")
 
-    if UseLlmEndpoint:
-        response = generate_sagemaker_answer(user_question, docs, LlmEndpointName)
+        prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents. 
+If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
+Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
+        <documents>
+        {docs}
+        </documents>
+        You must follow the next rules:
+        - Avoid answering questions like "what documents are there?" or list any documents if the answer is not in them.
+        - If you were not sure about the answer, reply only with "I don't know" without further details.
+        - If your answer is "I don't know", make sure not to cite the source name of any document.
+        - If the answer is in the provided documents, make sure to cite the source name of the document.
+        - Use bullet points to format your answer.
+        - Keep your answer concise and to the point.
+        User question is: {user_question}
+        Skip preambles and go straight to the answer.
+        """
+
+    if use_llm_endpoint:
+        response = generate_sagemaker_answer(prompt, llm_endpoint_name)
     else:
-        response = generate_bedrock_answer(user_question, docs)
+        response = generate_bedrock_answer(prompt)
     
     return response
 
@@ -171,15 +188,15 @@ def retrieve_llm_parameters(ssm):
     parameters = {param['Name']: param['Value'] for param in response['Parameters']}
         
     # Extract parameters
-    UseLlmEndpoint = parameters.get('UseLlmEndpoint','False') == 'True'
-    LlmEndpointName = parameters.get('LlmEndpointName')
+    use_llm_endpoint = parameters.get('UseLlmEndpoint','False') == 'True'
+    llm_endpoint_name = parameters.get('LlmEndpointName')
     
-    return UseLlmEndpoint,LlmEndpointName
+    return use_llm_endpoint,llm_endpoint_name
 
-def generate_sagemaker_answer(user_question, docs, LlmEndpointName):
+def generate_sagemaker_answer(user_question, docs, llm_endpoint_name):
     # initiate sagemaker llm endpoint name
     predictor = Predictor(
-            endpoint_name=LlmEndpointName,
+            endpoint_name=llm_endpoint_name,
             serializer=JSONSerializer(),
             deserializer=JSONDeserializer()
         )
@@ -188,22 +205,8 @@ def generate_sagemaker_answer(user_question, docs, LlmEndpointName):
             "inputs":  
             [
                 [
-                {"role": "system", "content": "You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents."},
-                {"role": "user", "content": f"""If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
-                    Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
-                            <documents>
-                            {docs}
-                            </documents>
-                            You must follow the next rules:
-                            - Avoid answering questions like "what documents are there?" or list any documents if the answer is not in them.
-                            - If you were not sure about the answer, reply only with "I don't know" without further details.
-                            - If your answer is "I don't know", make sure not to cite the source name of any document.
-                            - If the answer is in the provided documents, make sure to cite the source name of the document.
-                            - Use bullet points to format your answer.
-                            - Keep your answer concise and to the point.
-                            User question is: {user_question}
-                            Skip preambles and go straight to the answer.
-                            """},
+                {"role": "system", "content": ""},
+                {"role": "user", "content": prompt},
                 ]   
             ],
             "parameters":{"max_new_tokens":400, "top_p":0.9, "temperature":0.01}
@@ -215,23 +218,7 @@ def generate_sagemaker_answer(user_question, docs, LlmEndpointName):
 
     return sm_response
 
-def generate_bedrock_answer(user_question, docs):
-    prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents. 
-    If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
-    Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
-            <documents>
-            {docs}
-            </documents>
-            You must follow the next rules:
-            - Avoid answering questions like "what documents are there?" or list any documents if the answer is not in them.
-            - If you were not sure about the answer, reply only with "I don't know" without further details.
-            - If your answer is "I don't know", make sure not to cite the source name of any document.
-            - If the answer is in the provided documents, make sure to cite the source name of the document.
-            - Use bullet points to format your answer.
-            - Keep your answer concise and to the point.
-            User question is: {user_question}
-            Skip preambles and go straight to the answer.
-            """
+def generate_bedrock_answer(prompt):
     body = json.dumps(
         {
             "anthropic_version": "bedrock-2023-05-31",
