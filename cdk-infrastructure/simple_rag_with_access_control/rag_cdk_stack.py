@@ -1,4 +1,7 @@
 import json
+import random
+import string
+from typing import Dict, Tuple
 from pathlib import Path
 
 from aws_cdk import Duration, RemovalPolicy, Stack
@@ -10,9 +13,14 @@ from aws_cdk import aws_opensearchservice as aos
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_s3_deployment as s3deploy
 from aws_cdk import aws_ssm as ssm
+from aws_cdk import aws_sagemaker as sagemaker
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
+from cdklabs.generative_ai_cdk_constructs import (
+  JumpStartSageMakerEndpoint,
+  JumpStartModel,
+  SageMakerInstanceType
+)
 from constructs import Construct
-
 
 class RAGCdkStack(Stack):
 
@@ -21,6 +29,8 @@ class RAGCdkStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # Define the use_sm_llm_endpoint parameter
+        self.use_sm_llm_endpoint = config['USE_SAGEMAKER_ENDPOINT_LLM'] == 'True'
         # load custom attributes for Cognito
         self.custom_attributes = config["CUSTOM_ATTRIBUTES"]
 
@@ -74,11 +84,38 @@ class RAGCdkStack(Stack):
         self.add_opensearch_access_policies(
             prod_domain, ingestion_lambda_function, search_lambda
         )
+        
+        sm_endpoint = None
+        # SageMaker Endpoint
+        if self.use_sm_llm_endpoint:
+            sm_endpoint = self.create_sagemaker_endpoint(
+                'LLMEndpoint', 
+                'meta-textgeneration-llama-2-13b-f',
+                '2.0.1'
+            )
 
         # Store parameters in SSM
         self.store_parameters_in_ssm(
-            prod_domain, user_pool, user_pool_client, data_bucket, api
+            prod_domain, user_pool, user_pool_client, data_bucket, api, sm_endpoint
         )
+
+    def create_sagemaker_endpoint(self, id, model_id : str = 'meta-textgeneration-llama-2-13b-f', model_version : str = '2.0.1') -> JumpStartSageMakerEndpoint :
+        model_name = f"{model_id.upper().replace('-', '_')}_{model_version.replace('.', '_')}"
+
+        llm_endpoint_name = self.name_from_base(model_id.replace('/', '-').replace('.', '-'))
+
+        return JumpStartSageMakerEndpoint(self, id,
+            model=JumpStartModel.of(model_name),
+            accept_eula=True,
+            instance_type=SageMakerInstanceType.ML_G5_12_XLARGE,
+            endpoint_name=llm_endpoint_name
+        )
+
+    def name_from_base(self, base, max_length=63):
+        unique = ''.join(random.sample(string.digits, k=7))
+        max_length = 63
+        trimmed_base = base[: max_length - len(unique) - 1]
+        return "{}-{}".format(trimmed_base, unique)
 
     def add_to_param_store(self, id: str, name: str, value: str) -> None:
         ssm.StringParameter(self, id, parameter_name=name, string_value=value)
@@ -228,6 +265,20 @@ class RAGCdkStack(Stack):
                     resources=[f"{user_pool.user_pool_arn}/*"],
                     effect=iam.Effect.ALLOW,
                 ),
+                iam.PolicyStatement(
+                    actions=[
+                        "ssm:GetParameters",
+                    ],
+                    resources=["*"],
+                    effect=iam.Effect.ALLOW,
+                ),
+                iam.PolicyStatement(
+                    actions=[
+                        "sagemaker:InvokeEndpoint",
+                    ],
+                    resources=["*"],
+                    effect=iam.Effect.ALLOW,
+                ),
             ],
         )
 
@@ -330,6 +381,7 @@ class RAGCdkStack(Stack):
         user_pool_client: cognito.UserPoolClient,
         bucket: s3.Bucket,
         api: apigateway.RestApi,
+        sm_endpoint: JumpStartSageMakerEndpoint, 
     ) -> None:
         self.add_to_param_store(
             "AosEndpointParam", "AosEndpoint", domain.domain_endpoint
@@ -348,3 +400,12 @@ class RAGCdkStack(Stack):
             "APIGWInvokeEndpoint",
             f"https://{api.rest_api_id}.execute-api.{Stack.of(self).region}.amazonaws.com/prod",
         )
+        
+        self.add_to_param_store(
+            "UseLlmEndpoint", "UseLlmEndpoint", str(self.use_sm_llm_endpoint)
+        )
+        
+        if self.use_sm_llm_endpoint and sm_endpoint:
+            self.add_to_param_store(
+                "LlmEndpointName", "LlmEndpointName", sm_endpoint.cfn_endpoint.endpoint_name
+            )

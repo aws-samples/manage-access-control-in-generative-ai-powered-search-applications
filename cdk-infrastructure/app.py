@@ -24,5 +24,5 @@ env = cdk.Environment(
 config = load_env_config("prod.env")
 
 app = cdk.App()
-RAGCdkStack(app, "RAGCdkStack", config=config)
+RAGCdkStack(app, "RAGCdkStack", config=config, env=env)
 app.synth()
