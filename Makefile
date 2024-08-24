@@ -1,6 +1,6 @@
 init:
 	python3 -m venv venv
-	source venv/bin/activate
+	. venv/bin/activate
 	@cd cdk-infrastructure && pip install -r requirements.txt && pip install -r requirements-dev.txt
 
 bootstrap-cdk:
@@ -15,16 +15,19 @@ deploy-cdk-with-mock-users:
 mock-users:
 	@cd cdk-infrastructure && ./create_test_users.sh
 
-destroy:
-	@cd cdk-infrastructure && ./destroy.sh
+install-amplify-frontend:
+	@cd frontend && ./deploy
 
-install-frontend:
-	@cd frontend && npm ci
+install-run-local-frontend:
+	@cd frontend && ./get_envs.sh && npm ci && npm run dev
 
-run-frontend:
-	@cd frontend && ./get_envs.sh && npm run dev
+destroy-backend:
+	@cd cdk-infrastructure && ./cleanup.sh
 
-install-run-frontend: install-frontend run-frontend
+destroy-frontend:
+	@cd frontend && ./cleanup.sh
+
+destroy: destroy-frontend destroy-backend
 
 style:
 	@cd cdk-infrastructure && isort simple_rag_with_access_control/. && black .

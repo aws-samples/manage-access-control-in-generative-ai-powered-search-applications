@@ -1,5 +1,5 @@
 STACK_NAME="fgac-frontend"
-FRONTEND_REPOSITORY="https://github.com/ShinyTopology/test-rag-os-fgac"
+FRONTEND_REPOSITORY="https://github.com/ShinyTopology/rag-os-fgac-fe"
 SECRET_NAME_GITHUB_TOKEN=FrontendGithubToken
 
 # Check if the stack exists

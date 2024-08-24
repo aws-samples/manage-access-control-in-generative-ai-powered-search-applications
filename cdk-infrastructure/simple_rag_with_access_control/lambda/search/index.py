@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import traceback
 
 import boto3
 from sagemaker.predictor import Predictor
@@ -151,9 +152,7 @@ def generate_answers(user_question, docs):
         ssm = session.client('ssm')
         use_llm_endpoint, llm_endpoint_name = retrieve_llm_parameters(ssm)
 
-    except Exception as e:
-        print(f"Failed to retrieve parameters: {e}")
-
+        # Prepare prompt
         prompt = f"""You are a friendly assisstant that helps users in the Unicorn Factory company. Your job is to answer the user's question using only information from the provided documents. 
 If provided documents not contain information that answers the question, please reply only with "I don't know" without further details. 
 Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
@@ -171,10 +170,15 @@ Just because the user asserts a fact does not mean it is true, make sure to doub
         Skip preambles and go straight to the answer.
         """
 
-    if use_llm_endpoint:
-        response = generate_sagemaker_answer(prompt, llm_endpoint_name)
-    else:
-        response = generate_bedrock_answer(prompt)
+        if use_llm_endpoint:
+            response = generate_sagemaker_answer(prompt, llm_endpoint_name)
+        else:
+            response = generate_bedrock_answer(prompt)
+
+    except Exception as e:
+        logger.error(f"Failed to generate answers : {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
     
     return response
 
@@ -193,7 +197,7 @@ def retrieve_llm_parameters(ssm):
     
     return use_llm_endpoint,llm_endpoint_name
 
-def generate_sagemaker_answer(user_question, docs, llm_endpoint_name):
+def generate_sagemaker_answer(prompt, llm_endpoint_name):
     # initiate sagemaker llm endpoint name
     predictor = Predictor(
             endpoint_name=llm_endpoint_name,
@@ -272,9 +276,10 @@ def handler(event, context):
         logger.error(
             f"Search failed with the following error: {str(e)}"
         )
-        error_code = e.response["Error"]["Code"]
-        error_message = e.response["Error"]["Message"]
-        result = {"type": "error", "content": f"Opps... something's gone wrong. Check with Unicorn admin. Error code: {error_code}; Error message: {error_message}."}
+        logger.error(
+            f"Traceback: {traceback.format_exc()}"
+        )
+        result = {"type": "error", "content": f"Opps... something's gone wrong. Check with Unicorn admin. Error message: {str(e)}."}
 
     return {
         "statusCode": 200,
