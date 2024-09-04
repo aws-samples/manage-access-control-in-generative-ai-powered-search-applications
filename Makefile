@@ -1,10 +1,5 @@
 init:
-	python3 -m venv venv
-	. venv/bin/activate
 	@cd cdk-infrastructure && pip install -r requirements.txt && pip install -r requirements-dev.txt
-
-bootstrap-cdk:
-	@cd cdk-infrastructure && npx cdk bootstrap
 
 deploy-cdk:
 	@cd cdk-infrastructure && cdk deploy

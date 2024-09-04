@@ -1,6 +1,6 @@
-aws-cdk-lib==2.126.0
+aws-cdk-lib>=2.155.0
 constructs>=10.0.0,<11.0.0
 boto3>=1.34.78
-aws-cdk.aws-lambda-python-alpha
+aws-cdk.aws-lambda-python-alpha>=2.155.0a0
 aws-cdk.aws_cognito_identitypool_alpha
 cdklabs.generative-ai-cdk-constructs

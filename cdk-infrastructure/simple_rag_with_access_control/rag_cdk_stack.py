@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import uuid
 from typing import Dict, Tuple
 from pathlib import Path
 
@@ -171,7 +172,7 @@ class RAGCdkStack(Stack):
             "Domain",
             user_pool=user_pool,
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=config["COGNITO_DOMAIN_PREFIX"]
+                domain_prefix=f"{config['COGNITO_DOMAIN_PREFIX']}-{str(uuid.uuid4()).split('-')[0]}"
             ),
         )
         return user_pool, user_pool_client
