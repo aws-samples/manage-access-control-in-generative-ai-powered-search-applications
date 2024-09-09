@@ -11,7 +11,7 @@ mock-users:
 	@cd cdk-infrastructure && ./create_test_users.sh
 
 install-amplify-frontend:
-	@cd frontend && ./deploy
+	@cd frontend && ./deploy.sh
 
 install-run-local-frontend:
 	@cd frontend && ./get_envs.sh && npm ci && npm run dev
