@@ -23,6 +23,8 @@ from cdklabs.generative_ai_cdk_constructs import (
 )
 from constructs import Construct
 
+BEDROCK_MODELS = ["amazon.titan-embed-text-v2:0", "anthropic.claude-3-haiku-20240307-v1:0"]
+
 class RAGCdkStack(Stack):
 
     def __init__(
@@ -34,6 +36,7 @@ class RAGCdkStack(Stack):
         self.use_sm_llm_endpoint = config['USE_SAGEMAKER_ENDPOINT_LLM'] == 'True'
         # load custom attributes for Cognito
         self.custom_attributes = config["CUSTOM_ATTRIBUTES"]
+        self.bedrock_model_arns = [f"arn:aws:bedrock:{self.region}::foundation-model/{model}" for model in BEDROCK_MODELS]
 
         # Create OpenSearch domain
         prod_domain = self.create_opensearch_domain()
@@ -46,6 +49,15 @@ class RAGCdkStack(Stack):
 
         # Deploy data to S3 bucket
         self.deploy_data_to_s3_bucket(data_bucket)
+
+        self.sm_endpoint = None
+        # SageMaker Endpoint for text generation
+        if self.use_sm_llm_endpoint:
+            self.sm_endpoint = self.create_sagemaker_endpoint(
+                'LLMEndpoint', 
+                'meta-textgeneration-llama-2-13b-f',
+                '2.0.1'
+            )
 
         # Add Lambda functions
         ingestion_lambda_function = self.create_lambda_function(
@@ -86,18 +98,9 @@ class RAGCdkStack(Stack):
             prod_domain, ingestion_lambda_function, search_lambda
         )
         
-        sm_endpoint = None
-        # SageMaker Endpoint
-        if self.use_sm_llm_endpoint:
-            sm_endpoint = self.create_sagemaker_endpoint(
-                'LLMEndpoint', 
-                'meta-textgeneration-llama-2-13b-f',
-                '2.0.1'
-            )
-
         # Store parameters in SSM
         self.store_parameters_in_ssm(
-            prod_domain, user_pool, user_pool_client, data_bucket, api, sm_endpoint
+            prod_domain, user_pool, user_pool_client, data_bucket, api, self.sm_endpoint
         )
 
     def create_sagemaker_endpoint(self, id, model_id : str = 'meta-textgeneration-llama-2-13b-f', model_version : str = '2.0.1') -> JumpStartSageMakerEndpoint :
@@ -230,7 +233,7 @@ class RAGCdkStack(Stack):
                 ),
                 iam.PolicyStatement(
                     actions=["bedrock:InvokeModel"],
-                    resources=["*"],
+                    resources=self.bedrock_model_arns,
                     effect=iam.Effect.ALLOW,
                 ),
             ],
@@ -239,48 +242,52 @@ class RAGCdkStack(Stack):
     def get_search_lambda_policy(
         self, user_pool: cognito.UserPool, domain: aos.Domain
     ) -> iam.Policy:
-        return iam.Policy(
-            self,
-            "SearchLambdaExecutionPolicy",
-            statements=[
-                iam.PolicyStatement(
-                    actions=[
-                        "bedrock:InvokeModel",
-                        "bedrock:InvokeModelWithResponseStream",
-                    ],
-                    resources=["*"],
-                    effect=iam.Effect.ALLOW,
-                ),
-                iam.PolicyStatement(
-                    actions=[
-                        "es:ESHttpPost",
-                        "es:ESHttpPut",
-                        "es:ESHttpGet",
-                        "es:ESHttpDelete",
-                    ],
-                    resources=[domain.domain_arn + "/*"],
-                    effect=iam.Effect.ALLOW,
-                ),
-                iam.PolicyStatement(
-                    actions=["cognito-idp:GetUser"],
-                    resources=[f"{user_pool.user_pool_arn}/*"],
-                    effect=iam.Effect.ALLOW,
-                ),
-                iam.PolicyStatement(
-                    actions=[
-                        "ssm:GetParameters",
-                    ],
-                    resources=["*"],
-                    effect=iam.Effect.ALLOW,
-                ),
+        statements = [
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                ],
+                resources=self.bedrock_model_arns,
+                effect=iam.Effect.ALLOW,
+            ),
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpPost",
+                    "es:ESHttpPut",
+                    "es:ESHttpGet",
+                    "es:ESHttpDelete",
+                ],
+                resources=[domain.domain_arn + "/*"],
+                effect=iam.Effect.ALLOW,
+            ),
+            iam.PolicyStatement(
+                actions=["cognito-idp:GetUser"],
+                resources=[f"{user_pool.user_pool_arn}/*"],
+                effect=iam.Effect.ALLOW,
+            ),
+            iam.PolicyStatement(
+                actions=[
+                    "ssm:GetParameters",
+                ],
+                resources=["*"],
+                effect=iam.Effect.ALLOW,
+            ),
+        ]
+        if self.sm_endpoint:
+            statements.append(
                 iam.PolicyStatement(
                     actions=[
                         "sagemaker:InvokeEndpoint",
                     ],
-                    resources=["*"],
+                    resources=[self.sm_endpoint.endpoint_arn],
                     effect=iam.Effect.ALLOW,
                 ),
-            ],
+            )
+        return iam.Policy(
+            self,
+            "SearchLambdaExecutionPolicy",
+            statements=statements
         )
 
     def get_access_modifier_lambda_policy(

@@ -1,4 +1,4 @@
 boto3
 requests
-opensearch-py
-sagemaker
+opensearch-py==2.5.0
+sagemaker==2.222.0
