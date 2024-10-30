@@ -175,7 +175,7 @@ class RAGCdkStack(Stack):
             "Domain",
             user_pool=user_pool,
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=f"{config['COGNITO_DOMAIN_PREFIX']}-{str(uuid.uuid4()).split('-')[0]}"
+                domain_prefix=f"{config['COGNITO_DOMAIN_PREFIX']}-{self.account}-{self.region}",
             ),
         )
         return user_pool, user_pool_client
