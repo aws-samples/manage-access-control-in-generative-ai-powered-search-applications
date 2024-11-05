@@ -105,7 +105,7 @@ AWS Amplify Hosting enables a fully-managed deployment of the application's Reac
 
 To set up Amplify Hosting:
 
-1. Fork this GitHub repository and take note of your repository URL, for example https://github.com/<user-name>/manage-access-control-in-generative-ai-powered-search-applications/.
+1. Fork this GitHub repository and take note of your repository URL, for example https://github.com/<<user-name>>/manage-access-control-in-generative-ai-powered-search-applications/.
 
 2. Create a GitHub fine-grained access token for the new repository by following this guide. For the Repository permissions, select Read and write for Content and Webhooks.
 https://docs.aws.amazon.com/amplify/latest/userguide/setting-up-GitHub-access.html#setting-up-github-app-cloudformation
@@ -119,7 +119,7 @@ github_pat_T2wyo----------------------------------------------------------------
 
 Deploy the amplify frontend:
 
-1.	Open frontend/deploy.sh and put the github repository url in FRONTEND_REPOSITORY. It should be something like ‘https://github.com/<user-name>/manage-access-control-in-generative-ai-powered-search-applications/'
+1.	Open frontend/deploy.sh and put the github repository url in FRONTEND_REPOSITORY. It should be something like ‘https://github.com/<<user-name>>/manage-access-control-in-generative-ai-powered-search-applications/'
 2.	Use the below command to deploy cloudformation template.
 ```
 make install-amplify-frontend
