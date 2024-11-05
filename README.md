@@ -13,8 +13,7 @@ Before installing this sample, make sure you have following installed:
 4. [AWS CDK v2](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_install) 
 5. [Configure your AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html) 
 6. [Bootstrap AWS CDK in your target account](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_bootstrap) 
-
-Also, make sure you have at least 1 'ml.g5.12xlarge for endpoint usage' for service limit at the account-level. Refer to [Service Quota](https://docs.aws.amazon.com/general/latest/gr/sagemaker.html#limits_sagemaker) to request for quota increase if necessary.
+7. In case of LLM inference based on Amazon SageMaker, a sufficient service limit to deploy an ml.g5.12xlarge instance for the SageMaker endpoint. If needed, you can initiate a quota increase request. Refer to Service Quotas for more details.
 
 ## Deploy the AWS resources:
 We will use AWS CDK to deploy the architecture described above. CDK allows defining the Infrastructure through a familiar programming language such as Python
@@ -106,7 +105,7 @@ AWS Amplify Hosting enables a fully-managed deployment of the application's Reac
 
 To set up Amplify Hosting:
 
-1. Fork this GitHub repository and take note of your repository URL, for example https://github.com/<<user>>/manage-access-control-in-generative-ai-powered-search-applications/.
+1. Fork this GitHub repository and take note of your repository URL, for example https://github.com/<user-name>/manage-access-control-in-generative-ai-powered-search-applications/.
 
 2. Create a GitHub fine-grained access token for the new repository by following this guide. For the Repository permissions, select Read and write for Content and Webhooks.
 https://docs.aws.amazon.com/amplify/latest/userguide/setting-up-GitHub-access.html#setting-up-github-app-cloudformation
@@ -120,7 +119,7 @@ github_pat_T2wyo----------------------------------------------------------------
 
 Deploy the amplify frontend:
 
-1.	Open frontend/deploy.sh and put the github repository url in FRONTEND_REPOSITORY. It should be something like ‘https://github.com/<<user>>/manage-access-control-in-generative-ai-powered-search-applications/'
+1.	Open frontend/deploy.sh and put the github repository url in FRONTEND_REPOSITORY. It should be something like ‘https://github.com/<user-name>/manage-access-control-in-generative-ai-powered-search-applications/'
 2.	Use the below command to deploy cloudformation template.
 ```
 make install-amplify-frontend
