@@ -4,7 +4,7 @@
     "mappings_file_s3_path": "mappings.json",
     "load_data": true,
     "data_file_s3_path": "docs_os_rag_metadata_use_case.zip",
-    "index_name": "test-index-3",
+    "index_name": "unicorn-robotics",
     "model_provider": "bedrock",
     "model_id": "amazon.titan-embed-text-v2:0"
 }
