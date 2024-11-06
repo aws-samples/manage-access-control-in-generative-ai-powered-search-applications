@@ -1,4 +1,4 @@
-# Manage access controls in GenAI-powered search applications using Amazon OpenSearch and AWS Cognito
+# Manage access controls in generative AI-powered search applications using Amazon OpenSearch Service and AWS Cognito
 This code sample illustrates how to build a document searching RAG solutions that ensure that only authorized users can access and interact with specific documents based on their roles, departments, and other relevant attributes. It combines Amazon Opensearch Service and Amazon Cognito custom attributes to make a tag based access control mechanism that makes it simple to manage at scale. 
 
 ![doc/arch.png](doc/arch.png)
