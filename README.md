@@ -1,4 +1,4 @@
-# Manage access controls in generative AI-powered search applications using Amazon OpenSearch Service and AWS Cognito
+# Manage access controls in generative AI-powered search applications using Amazon OpenSearch Service and Amazon Cognito
 This code sample illustrates how to build a document searching RAG solutions that ensure that only authorized users can access and interact with specific documents based on their roles, departments, and other relevant attributes. It combines Amazon Opensearch Service and Amazon Cognito custom attributes to make a tag based access control mechanism that makes it simple to manage at scale. 
 
 ![doc/arch.png](doc/arch.png)
@@ -128,7 +128,8 @@ make install-amplify-frontend
 
 
 ## Cleanup
-Run `make destroy` to cleanup all related resources in your account. 
+Run `make destroy` to cleanup all related resources in your account. The `make destroy` will run an additional logic to destroy the cdk-infrastructure (including `cdk destroy`) in addition to destroying the Amplify frontend. 
+
 
 ## Security
 This application was written for demonstration and educational purposes and not for production use. The [Security Pillar of the AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html)
